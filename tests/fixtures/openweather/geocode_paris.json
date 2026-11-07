@@ -1,0 +1,10 @@
+[
+  {
+    "name": "Paris",
+    "local_names": {"en": "Paris", "fr": "Paris"},
+    "lat": 48.8588897,
+    "lon": 2.3200410217200766,
+    "country": "FR",
+    "state": "Île-de-France"
+  }
+]

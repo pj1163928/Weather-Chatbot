@@ -11,9 +11,11 @@ See [prd/weather-chatbot.md](prd/weather-chatbot.md) for requirements and [plans
 
 `.env` is gitignored and must never be committed.
 
-Only `XAI_API_KEY` is required for now. `OPENWEATHER_API_KEY` becomes required
-once the weather tools are added. Sign up for OpenWeather early: new keys can take
-up to 2 hours to activate.
+Both keys are required. The app shows a setup message instead of starting if
+either is missing or still a placeholder. Sign up for OpenWeather early: new keys
+can take up to 2 hours to activate. Until then OpenWeather rejects the key
+(HTTP 401): the terminal shows `OpenWeather HTTP 401` and the chat says the
+weather service is unavailable.
 
 ## Run
 

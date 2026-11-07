@@ -68,7 +68,7 @@ Build a bare Streamlit chat page that sends the user's message to the model, ini
 - [x] Starting the app with a missing or placeholder `XAI_API_KEY` shows a clear setup message instead of crashing or calling the API.
 - [x] The app starts and chats normally while `OPENWEATHER_API_KEY` is still missing or a placeholder.
 - [x] The model is initialized with `ChatXAI(model="grok-4.7")`.
-- [ ] With a working xAI key, a message typed in the chat returns a complete grok-4.7 reply after a spinner.
+- [x] With a working xAI key, a message typed in the chat returns a complete grok-4.7 reply after a spinner.
 - [x] A minimal weather-assistant system prompt is sent with every request, and the chatbot never runs without behavioral instructions.
 - [x] No key appears anywhere in source code.
 - [x] pytest unit tests cover the config check (missing key, placeholder key, configured key). These tests prove only that a key is *configured and not a placeholder*. They don't, and can't, prove the provider accepts it; that's confirmed by the live chat above.
@@ -102,16 +102,16 @@ All external calls time out after 10 seconds. Unknown cities produce a clean "ci
 
 ### Acceptance criteria
 
-- [ ] `get_current_weather` is a LangChain `@tool` with a structured input schema, bound with `bind_tools`, and units aren't in its model-visible schema.
-- [ ] A missing or placeholder `OPENWEATHER_API_KEY` now shows the setup message, and the config-check tests are extended to cover it.
-- [ ] Asking for current weather in a named city triggers the tool, and the reply uses real OpenWeather data.
-- [ ] The card shows temperature, feels-like, humidity, wind, condition and icon, plus the resolved location (for example, "Paris, Île-de-France, FR").
-- [ ] "Springfield, IL"-style input is accepted and resolves correctly.
-- [ ] A nonsense or misspelled city produces a polite "city not found" message.
-- [ ] Invalid city arguments (bad characters, over 60 characters) are rejected before any network call.
-- [ ] The loop stops after 3 tool rounds and blocks a repeated identical tool call.
-- [ ] Cards from earlier messages still render after new messages are sent.
-- [ ] pytest covers city validation (valid, invalid characters, the 60/61-character boundary) and the current-weather parsing from sample JSON.
+- [x] `get_current_weather` is a LangChain `@tool` with a structured input schema, bound with `bind_tools`, and units aren't in its model-visible schema.
+- [x] A missing or placeholder `OPENWEATHER_API_KEY` now shows the setup message, and the config-check tests are extended to cover it.
+- [x] Asking for current weather in a named city triggers the tool, and the reply uses real OpenWeather data.
+- [x] The card shows temperature, feels-like, humidity, wind, condition and icon, plus the resolved location (for example, "Paris, Île-de-France, FR").
+- [x] "Springfield, IL"-style input is accepted and resolves correctly.
+- [x] A nonsense or misspelled city produces a polite "city not found" message.
+- [x] Invalid city arguments (bad characters, over 60 characters) are rejected before any network call.
+- [x] The loop stops after 3 tool rounds and blocks a repeated identical tool call.
+- [x] Cards from earlier messages still render after new messages are sent.
+- [x] pytest covers city validation (valid, invalid characters, the 60/61-character boundary) and the current-weather parsing from sample JSON.
 
 ### TDD recommendation
 

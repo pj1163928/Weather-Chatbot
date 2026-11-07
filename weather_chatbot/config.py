@@ -13,8 +13,9 @@ from dotenv import load_dotenv
 # The local secrets file, at the project root. It is gitignored.
 ENV_PATH: Path = Path(__file__).resolve().parent.parent / ".env"
 
-# Keys the app refuses to start without. Phase 2 adds OPENWEATHER_API_KEY.
-REQUIRED_KEYS: tuple[str, ...] = ("XAI_API_KEY",)
+# Keys the app refuses to start without. OPENWEATHER_API_KEY joined in Phase 2,
+# when the weather tools first needed it.
+REQUIRED_KEYS: tuple[str, ...] = ("XAI_API_KEY", "OPENWEATHER_API_KEY")
 
 # Placeholder values copied from .env.example (current and earlier wording).
 # Any value wrapped in <angle brackets> is also treated as a placeholder.
@@ -64,13 +65,23 @@ def setup_message(problems: list[str]) -> str:
 
     It names the keys and says where to put them. It never includes a value.
     """
-    names = ", ".join(f"`{name}`" for name in problems)
+    names = " and ".join(f"`{name}`" for name in problems)
+    verb = "is" if len(problems) == 1 else "are"
     return (
-        f"**Setup needed:** {names} is missing or still a placeholder.\n\n"
+        f"**Setup needed:** {names} {verb} missing or still a placeholder.\n\n"
         "1. In the project folder, copy `.env.example` to `.env` "
         "(if you haven't already).\n"
-        "2. Open `.env` and replace the placeholder with your real key.\n"
+        "2. Open `.env` and replace each placeholder with your real key.\n"
         "3. Save the file and refresh this page.\n\n"
         "Never paste keys into the code. `.env` is gitignored, so it stays "
         "on your machine."
     )
+
+
+def openweather_key() -> str:
+    """Return the OpenWeather key for the weather module's API requests only.
+
+    It is read from the environment at call time (after ``load_env()``). Never
+    put the returned value in a prompt, reply, tool result or log line.
+    """
+    return os.environ.get("OPENWEATHER_API_KEY", "").strip()

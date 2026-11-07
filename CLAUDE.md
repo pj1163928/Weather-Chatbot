@@ -2,16 +2,18 @@
 
 A locally run Streamlit chat app that answers weather questions using xAI's
 Grok (`grok-4.7`) through LangChain. It is a course project where security is
-graded. It is being built in 8 phases. So far only the secure skeleton exists:
-key checks, the chat page and a single Grok call. The OpenWeather tools and the
-layered security pipeline are still planned. The plan's ticked criteria show
-what is done.
+graded. It is being built in 8 phases. So far the app checks both keys,
+answers current-weather questions through the `get_current_weather` tool and a
+capped tool-calling loop, and shows a weather card in the chat. The forecast
+tool and the layered security pipeline are still planned. The plan's ticked
+criteria show what is done.
 
 The developer is a beginner, so code should favor clarity.
 
 ## Where things are
 
-- [app.py](app.py) is the Streamlit UI. [weather_chatbot/](weather_chatbot/) holds the other modules. [tests/](tests/) holds the pytest suite.
+- [app.py](app.py) is the Streamlit UI. [weather_chatbot/](weather_chatbot/) holds the other modules. [tests/](tests/) holds the pytest suite and its sample OpenWeather JSON.
+- [docs/](docs/): what is built, one topic per file: [ARCHITECTURE.md](docs/ARCHITECTURE.md) (modules, request flow), [SECURITY.md](docs/SECURITY.md) (controls and rules), [TESTING.md](docs/TESTING.md) (test files, fakes). "Read before…" says when to open each.
 - [prd/weather-chatbot.md](prd/weather-chatbot.md): the requirements. Its wording is authoritative.
 - [plans/weather-chatbot.md](plans/weather-chatbot.md): the phased plan, its cross-phase architectural decisions and the acceptance criteria.
 - [PROMPTS.md](PROMPTS.md): a log of each build session, newest first.
@@ -32,7 +34,7 @@ The developer is a beginner, so code should favor clarity.
 
 ## Read before…
 
-- **changing keys, config, logging, error messages, or anything that handles user text or model output:** [docs/SECURITY.md](docs/SECURITY.md)
+- **changing keys, config, logging, error messages, tools or loop limits, or anything that handles user text, model output or OpenWeather data:** [docs/SECURITY.md](docs/SECURITY.md)
 - **adding a module, changing the request flow or the Streamlit page:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - **writing or changing tests:** [docs/TESTING.md](docs/TESTING.md)
 - **starting a phase:** the phase in the plan and the PRD sections behind its user stories (the `/implement` skill does this)
