@@ -5,9 +5,9 @@ and the rules all code must follow. Every layer of the
 [PRD](../prd/weather-chatbot.md#implementation-decisions)'s defense is built:
 the free gate (rate limits and pre-filter), the scope classifier, the hardened
 system prompt with its canary, the tool and loop limits, the output scan, safe
-error messages and the redacted security log. What is left is in the
-[plan](../plans/weather-chatbot.md)'s Phase 8 (README, manual checks,
-submission).
+error messages and the redacted security log. The
+[README](../README.md#security-and-api-protection) summarizes them for
+graders, and [TESTING.md](../TESTING.md) checks the live behavior by hand.
 
 ## Secrets: what exists
 

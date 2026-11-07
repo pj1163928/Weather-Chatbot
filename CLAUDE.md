@@ -16,8 +16,10 @@ with a hardened system prompt that carries a leak-detecting canary. Every reply
 is scanned for keys, key-like strings, the canary and code fences before it is
 shown. Every xAI and OpenWeather failure gives the user a fixed, friendly
 message, and its redacted details (no URLs, headers or exception text in the
-stack trace) go only to the security log. Phase 8 (README, manual checks,
-submission) is still planned. The plan's ticked criteria show what is done.
+stack trace) go only to the security log. Phase 8 added the submission
+README (setup, architecture overview, security reflection) and the manual
+checklist; its live checks, video and final push are the developer's. The
+plan's ticked criteria show what is done.
 
 The developer is a beginner, so code should favor clarity.
 
@@ -28,7 +30,8 @@ The developer is a beginner, so code should favor clarity.
 - [prd/weather-chatbot.md](prd/weather-chatbot.md): the requirements. Its wording is authoritative.
 - [plans/weather-chatbot.md](plans/weather-chatbot.md): the phased plan, its cross-phase architectural decisions and the acceptance criteria.
 - [PROMPTS.md](PROMPTS.md): a log of each build session, newest first.
-- [README.md](README.md): setup and run steps for people.
+- [README.md](README.md): the submission README: setup and run steps, the architecture overview and the security reflection, for people and graders.
+- [TESTING.md](TESTING.md): the manual checklist of live prompts (expected result, pass/fail) and the video demo script. The automated suite is in [docs/TESTING.md](docs/TESTING.md).
 
 ## Conventions
 

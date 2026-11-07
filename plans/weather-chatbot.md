@@ -352,14 +352,14 @@ Then produce the submission:
 ### Acceptance criteria
 
 - [ ] README directions alone are enough to set up and run the app from scratch.
-- [ ] The full pytest suite passes in one run, and the result is recorded.
+- [x] The full pytest suite passes in one run, and the result is recorded.
 - [ ] Clean setup works: a fresh virtual environment plus `.env` copied from `.env.example` shows the placeholder-key message, and after real keys are added the app runs and answers a weather question.
 - [ ] Every `TESTING.md` prompt has a recorded pass/fail result. Any failure is fixed and re-run, or documented honestly.
-- [ ] `git check-ignore -v .env` and `git check-ignore -v logs/security.log` both confirm the files are ignored, and `git status` shows no secrets staged.
-- [ ] The README contains an architecture overview naming `ChatXAI(model="grok-4.7")`, the two `@tool` functions, `bind_tools` and the tool-calling loop.
-- [ ] The README contains a security reflection explaining at least two code-side controls, including prompt-injection defense and API-hijacking prevention.
+- [x] `git check-ignore -v .env` and `git check-ignore -v logs/security.log` both confirm the files are ignored, and `git status` shows no secrets staged.
+- [x] The README contains an architecture overview naming `ChatXAI(model="grok-4.7")`, the two `@tool` functions, `bind_tools` and the tool-calling loop.
+- [x] The README contains a security reflection explaining at least two code-side controls, including prompt-injection defense and API-hijacking prevention.
 - [ ] A 1–3 minute screen recording exists showing current weather, a five-day forecast, a blocked prompt injection and a refused off-topic question.
-- [ ] `git ls-files` and `git log --all -- .env` show `.env` was never committed.
+- [x] `git ls-files` and `git log --all -- .env` show `.env` was never committed.
 - [ ] The code is pushed to GitHub, the repository on GitHub contains no `.env` or `logs/`, and the repository link is recorded in the README.
 
 ### TDD recommendation

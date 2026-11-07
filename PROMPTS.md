@@ -5,6 +5,43 @@ and the decisions made along the way. Newest entries first.
 
 ---
 
+## 2026-11-07 — Weather chatbot: Phase 8/8, Docs + full verification
+
+### Prompts
+
+1. The `/implement` skill, given `weather-chatbox phase 8`.
+2. "Looks good also make sure it meets this criteria:" with the course rubric pasted: a README.md with a Security Reflection containing Setup & Run Instructions (installing dependencies, configuring `.env`, launching the app), an Architecture Overview (how the LangChain pipeline and tool-calling loop work), and a Security & API Protection Write-Up explaining at least 2 code-side controls (how the code defends against prompt injection; how it restricts API service hijacking and protects the shared API keys).
+
+### Summary
+
+- **Outcome:** The submission package is written. The README now has setup and run steps, an architecture overview and a three-part security write-up, each matched to the rubric's headings. The new root `TESTING.md` holds a 23-prompt manual checklist and the video demo script. The full regression run passes 378 tests, and `ruff check` and `ruff format` are clean; the project has no type checker. No app code changed. Five Phase 8 criteria are ticked. The rest need the developer: the live checklist, real keys in a clean clone, the video and the final push.
+- **Changes:**
+  - `README.md` — rewritten for graders and new users:
+    - Setup and run: what you need, when and where each key goes, the 2-hour OpenWeather delay, and PowerShell and Bash commands.
+    - A troubleshooting table.
+    - The architecture overview: the module table, `ChatXAI(model="grok-4.7")`, the `@tool` functions with `CityInput` and `InjectedToolArg`, `bind_tools`, the loop as pseudo-code, and one question followed through all five steps.
+    - The security write-up: prompt-injection defense, API-hijacking restrictions with their constants, and key protection.
+    - The security log, known limitations, the verification proof and the GitHub link.
+  - `TESTING.md` — new. The manual checklist in five sections (weather answers, prompt injection, scope, rate limit, failures), each prompt with its expected result, expected log line and a pass/fail column. Also a results summary and the 1–3 minute video demo script.
+  - `docs/TESTING.md`, `docs/SECURITY.md`, `CLAUDE.md` — links to the README and the manual checklist; the "Phase 8 is still planned" status lines replaced.
+  - `plans/weather-chatbot.md` — five Phase 8 criteria ticked: the regression run, the `check-ignore` proof, the architecture overview, the security reflection, and `.env` never committed.
+- **TDD:** Skipped, as the plan recommends: the phase is documentation and verification runs, with no new behavior for a failing test to drive. The regression run re-checked every earlier TDD test.
+- **Decisions:**
+  - The manual checklist is a new root `TESTING.md`, the name the plan uses and where graders will look. `docs/TESTING.md` still describes the automated suite, and the two link to each other.
+  - The demo script lives in `TESTING.md` next to the checklist, its rehearsal material.
+  - The checklist has 23 prompts instead of about 15. It also covers the five Phase 6 criteria and the one Phase 7 criterion that depend on live Grok behavior. Every prompt was run through the real `prefilter()`: the three injection rows and the over-long row block with the stated reason, and every other row passes on to the classifier.
+  - The 20-message cap is left to its automated test rather than 21 manual messages.
+  - The live checklist is run by the developer in the browser (option A of the brief). The brief recommended it, and the approval didn't choose another.
+  - The clean-setup run used a fresh `git clone` in the scratchpad with `uv sync --locked` and `.env` copied from `.env.example`. `AppTest` showed the setup message for both keys and no chat input. The clone's suite gave 377 passed and 1 skipped (the source-secrets test skips without real keys). A headless `streamlit run` answered its health check. Real keys were not copied into the clone; the developer adds them.
+  - The GitHub link is the existing `origin`, `https://github.com/pj1163928/Weather-Chatbot`. Checked with `gh`: it holds `.env.example` but no `.env` or `logs/`. It is **private**, so graders may need access.
+- **Deviations:** None. The pasted rubric was folded into the README: its sections are named after the rubric's headings, and the key-protection part speaks of the shared xAI key.
+- **Sideways:**
+  - The first clean-setup check failed because `AppTest.from_file()` looks for a relative path next to the calling script, not in the working directory. Passing an absolute path fixed it.
+  - The command meant to stop the clean clone's Streamlit server found nothing. `netstat` showed the server had already exited with its shell.
+  - A plan-ticking script that tried a bare `python` first hung and was stopped with no change made. The ticks were made with the editor instead.
+
+---
+
 ## 2026-11-07 — Weather chatbot: Phase 7/8, Output scan + safe errors
 
 ### Prompts
