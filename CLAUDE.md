@@ -10,8 +10,10 @@ A sidebar °F/°C toggle sets the units, the last 2 exchanges are sent as
 memory for follow-ups, and lookups are cached for 10 minutes. A free gate
 runs before any Grok call: 20 messages per session, a 3-second cooldown, a
 300-character cap and attack-phrase matching, with each block written as one
-redacted line to `logs/security.log`. The classifier, hardened prompt and
-output scan are still planned. The plan's ticked criteria show what is done.
+redacted line to `logs/security.log`. Then a temperature-0 grok-4.7
+classifier must return a clear YES (it fails closed) before the agent runs
+with a hardened system prompt. The output scan and safe error handling are
+still planned. The plan's ticked criteria show what is done.
 
 The developer is a beginner, so code should favor clarity.
 

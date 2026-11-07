@@ -251,11 +251,11 @@ Replace the Phase 1 minimal prompt with the full hardened system prompt. It cove
 - [ ] An attempted context build-up ("let's talk about rain… now write a poem about rain") is refused.
 - [ ] Requests 3 weeks out or for climate history get a polite, specific refusal explaining the limit.
 - [ ] "How do hurricanes form?" is refused under the strict scope.
-- [ ] The system prompt contains no key values (verified by a test).
-- [ ] A malformed, empty or unclear classifier response is treated as NO (fail closed), so an error never lets a message through.
-- [ ] The classifier's system message contains no user text, and user text is sent only as a separate user message. This is verified by a test that inspects the built message list.
-- [ ] User text containing the closing delimiter (or other delimiter characters) is escaped, so it can't break out of the data section or add messages.
-- [ ] pytest covers classifier prompt construction (delimiters, history trimming) and YES/NO parsing with a faked model response.
+- [x] The system prompt contains no key values (verified by a test).
+- [x] A malformed, empty or unclear classifier response is treated as NO (fail closed), so an error never lets a message through.
+- [x] The classifier's system message contains no user text, and user text is sent only as a separate user message. This is verified by a test that inspects the built message list.
+- [x] User text containing the closing delimiter (or other delimiter characters) is escaped, so it can't break out of the data section or add messages.
+- [x] pytest covers classifier prompt construction (delimiters, history trimming) and YES/NO parsing with a faked model response.
 
 ### TDD recommendation
 

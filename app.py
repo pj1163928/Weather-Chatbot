@@ -9,9 +9,15 @@ from typing import Any
 
 import streamlit as st
 
-from weather_chatbot.agent import create_model, run_agent
+from weather_chatbot.agent import create_model, run_agent, trim_history
 from weather_chatbot.config import check_keys, load_env, setup_message
-from weather_chatbot.security import RateLimiter, check_free_gate
+from weather_chatbot.security import (
+    Block,
+    RateLimiter,
+    check_free_gate,
+    check_scope,
+    create_classifier_model,
+)
 from weather_chatbot.weather import (
     DEFAULT_UNITS,
     SUPPORTED_UNITS,
@@ -27,7 +33,7 @@ UNAVAILABLE_MESSAGE = (
     "correct."
 )
 
-# The icon shown on a fixed refusal from the free gate.
+# The icon shown on a fixed refusal from the free gate or the classifier.
 BLOCKED_ICON = ":material/block:"
 
 # The session-state key of the sidebar °F/°C toggle.
@@ -46,6 +52,12 @@ logger = logging.getLogger(__name__)
 def get_model():
     """Create the Grok model once and reuse it across reruns."""
     return create_model()
+
+
+@st.cache_resource
+def get_classifier_model():
+    """Create the classifier's Grok model (temperature 0) once and reuse it."""
+    return create_classifier_model()
 
 
 def units_toggle() -> str:
@@ -221,10 +233,46 @@ def render_forecast(card: dict[str, Any]) -> None:
             st.caption("A partial day covers only the hours the forecast includes.")
 
 
+def blocked_answer(block: Block) -> dict[str, Any]:
+    """The assistant message for a blocked question: its fixed refusal, no cards.
+
+    It is marked ``blocked``, so it never goes back to Grok as history.
+    """
+    return {"role": "assistant", "content": block.message, "cards": [], "blocked": True}
+
+
+def ask_grok(
+    text: str, units: str, earlier_messages: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """Answer a question that passed the free gate: the classifier, then the agent.
+
+    Returns the assistant message to show and store. The classifier sees the
+    same last two exchanges as the agent. If it says NO, the agent never
+    runs. If either Grok call fails, the user gets ``UNAVAILABLE_MESSAGE``
+    and nothing else runs.
+    """
+    try:
+        history = trim_history(earlier_messages)
+        block = check_scope(get_classifier_model(), text, history)
+        if block is not None:
+            return blocked_answer(block)
+        result = run_agent(get_model(), text, units, earlier_messages)
+    except Exception as exc:  # noqa: BLE001 - user sees a safe message
+        # Log only the error type: messages can carry request details.
+        logger.warning("xAI call failed: %s", type(exc).__name__)
+        return {"role": "assistant", "content": UNAVAILABLE_MESSAGE, "cards": []}
+    return {
+        "role": "assistant",
+        "content": result.reply,
+        "cards": weather_cards(result.tool_results),
+    }
+
+
 def render_reply(message: dict[str, Any]) -> None:
     """Draw a reply's text: a fixed refusal as a warning, anything else as Markdown.
 
-    A refusal from the free gate is the app's own text, never the model's.
+    A refusal from the free gate or the classifier is the app's own text,
+    never the model's.
     """
     if message.get("blocked"):
         st.warning(message["content"], icon=BLOCKED_ICON)
@@ -254,7 +302,8 @@ units = units_toggle()
 
 # Each message is {"role", "content"}, plus "cards" (raw tool results) for
 # assistant replies, so cards re-render with the history. A message the free
-# gate blocked, and its refusal, also have "blocked": True, which keeps them
+# gate or the classifier blocked, and its refusal, also have "blocked": True,
+# which keeps them
 # out of the model's memory. The rate-limit counters live in their own
 # session-state entry, which only the RateLimiter changes, so clearing this
 # list doesn't reset them.
@@ -288,26 +337,15 @@ if prompt := st.chat_input("Ask about the weather in a city…"):
 
     with st.chat_message("assistant"):
         if block is not None:
-            question["blocked"] = True
-            answer = {
-                "role": "assistant",
-                "content": block.message,
-                "cards": [],
-                "blocked": True,
-            }
-            render_reply(answer)
+            answer = blocked_answer(block)
         else:
             # No streaming: the reply appears only once it is complete.
             with st.spinner("Checking the weather…"):
-                try:
-                    result = run_agent(get_model(), text, units, earlier_messages)
-                    reply, cards = result.reply, weather_cards(result.tool_results)
-                except Exception as exc:  # noqa: BLE001 - user sees a safe message
-                    # Log only the error type: messages can carry request details.
-                    logger.warning("xAI call failed: %s", type(exc).__name__)
-                    reply, cards = UNAVAILABLE_MESSAGE, []
-            answer = {"role": "assistant", "content": reply, "cards": cards}
-            render_reply(answer)
-            for card in cards:
-                render_card(card)
+                answer = ask_grok(text, units, earlier_messages)
+        if answer.get("blocked"):
+            # A blocked question stays on screen but out of Grok's memory.
+            question["blocked"] = True
+        render_reply(answer)
+        for card in answer["cards"]:
+            render_card(card)
     st.session_state.messages.append(answer)
