@@ -141,13 +141,13 @@ The UI renders the five days as a 5-row forecast table inside the chat message. 
 
 ### Acceptance criteria
 
-- [ ] Asking for a forecast triggers the forecast tool and shows a 5-row table (day, high/low, condition, chance of rain).
-- [ ] `get_weather_forecast` is a LangChain `@tool` with a structured input schema, and both tools are bound with `bind_tools`.
-- [ ] The forecast always contains exactly five days: first five local dates starting today, later dates dropped, and days with fewer than 8 entries labeled "partial." Tests cover a 6-date response, a 5-date response (start exactly at local midnight) and a short response that produces the friendly error.
-- [ ] Days are grouped by the city's local date, not UTC. This is verified with a sample city whose UTC offset shifts entries across midnight.
-- [ ] Practical-advice questions are answered from the forecast data.
-- [ ] A single question can use both tools when needed, within the 3-round limit.
-- [ ] pytest covers per-day grouping, high/low, most-common condition, max chance of rain, time-zone boundary handling and partial first/last days.
+- [x] Asking for a forecast triggers the forecast tool and shows a 5-row table (day, high/low, condition, chance of rain).
+- [x] `get_weather_forecast` is a LangChain `@tool` with a structured input schema, and both tools are bound with `bind_tools`.
+- [x] The forecast always contains exactly five days: first five local dates starting today, later dates dropped, and days with fewer than 8 entries labeled "partial." Tests cover a 6-date response, a 5-date response (start exactly at local midnight) and a short response that produces the friendly error.
+- [x] Days are grouped by the city's local date, not UTC. This is verified with a sample city whose UTC offset shifts entries across midnight.
+- [x] Practical-advice questions are answered from the forecast data.
+- [x] A single question can use both tools when needed, within the 3-round limit.
+- [x] pytest covers per-day grouping, high/low, most-common condition, max chance of rain, time-zone boundary handling and partial first/last days.
 
 ### TDD recommendation
 

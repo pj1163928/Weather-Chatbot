@@ -1,0 +1,10 @@
+[
+  {
+    "name": "Seattle",
+    "local_names": {"en": "Seattle"},
+    "lat": 47.6038321,
+    "lon": -122.330062,
+    "country": "US",
+    "state": "Washington"
+  }
+]

@@ -18,14 +18,15 @@ and assigned to phases in the [plan](../plans/weather-chatbot.md).
 
 ## Tool and loop controls: what exists
 
-- **City validation:** `is_valid_city()` runs before any network call. After trimming, a city must be 1–60 characters (`MAX_CITY_LENGTH`), contain a letter, and use only letters, spaces, commas, hyphens and periods (`ALLOWED_CITY_PUNCTUATION`). A rejected city returns an `invalid_city` result and nothing is sent.
+- **City validation:** `is_valid_city()` runs before any network call, for both tools (they share `look_up_weather()`). After trimming, a city must be 1–60 characters (`MAX_CITY_LENGTH`), contain a letter, and use only letters, spaces, commas, hyphens and periods (`ALLOWED_CITY_PUNCTUATION`). A rejected city returns an `invalid_city` result and nothing is sent.
 - **Tool-round cap:** `MAX_TOOL_ROUNDS = 3` rounds of tool calls per question, plus one turn to answer. A 4th request is refused without running, and the user sees `TOOL_LIMIT_MESSAGE`. At most 4 Grok calls per question.
 - **Repeated-call block:** the same tool with exactly the same arguments runs at most once per question. A repeat is answered with a `repeated_call` error and is not sent to OpenWeather.
 - **Reply cap:** `MAX_REPLY_TOKENS = 500` is passed to `ChatXAI` as `max_tokens`.
 - **Timeouts:** `REQUEST_TIMEOUT_SECONDS = 10` for every OpenWeather request and for the `ChatXAI` client.
 - **Units:** the loop always overwrites `units` with the app's value, so the model can't choose them. `units` is hidden from the model's tool schema.
 - **Only known tools run:** a tool name outside `TOOLS_BY_NAME`, or arguments that fail the tool's schema, become an error result.
-- **Cards come from data:** weather cards are drawn from the raw tool result, not from the model's reply. The location and condition are shown with `st.text`, so OpenWeather text is never parsed as Markdown. The icon code must match `ICON_PATTERN` (like `10d`) before it goes into the image URL.
+- **Cards come from data:** weather cards and the forecast table are drawn from the raw tool result, not from the model's reply. The location and condition are shown with `st.text`, and the forecast table uses `st.dataframe` (not `st.table`, which renders Markdown in cells), so OpenWeather text is never parsed as Markdown.
+- **No invented forecast days:** a response covering fewer than five local dates becomes a `forecast_incomplete` error, never padded days. The icon code must match `ICON_PATTERN` (like `10d`) before it goes into the image URL.
 
 ## Rules for all code
 

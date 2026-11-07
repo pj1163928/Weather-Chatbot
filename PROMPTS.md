@@ -5,6 +5,34 @@ and the decisions made along the way. Newest entries first.
 
 ---
 
+## 2026-11-06 — Weather chatbot: Phase 3/8, 5-day forecast
+
+### Prompts
+
+1. The `/implement` skill, given `weather-chatbot phase 3`.
+2. "Approved, with two clarifications: 1. Partial-day detection: Define precisely how partial is calculated. A day should be partial when the API response does not contain all eight expected 3-hour entries for that local date. This avoids incorrectly marking a full day partial simply because the forecast begins at a different time. 2. Timezone handling: Keep the fixed-offset limitation documented, as proposed. The tests should explicitly cover entries crossing UTC midnight in both positive and negative offsets."
+3. "Looks good move to next" (approved the red grouping test).
+4. "Yes move to behavior 2" (approved the green grouping implementation).
+5. "Looks good move to development" (approved the red daily-summary test).
+
+### Summary
+
+- **Outcome:** Grok answers forecast questions by calling the new `get_weather_forecast` `@tool`, bound with `get_current_weather` through `bind_tools`. The tool groups OpenWeather's 40 three-hour entries by the city's local date into exactly five days, and the chat shows a 5-row table (Day, High / Low, Condition, Chance of rain) that stays in the history. 105 tests pass; `ruff check` and `ruff format` are clean; the project has no type checker. Live checks with grok-4.7 and OpenWeather: a Seattle forecast (5.4 s), "umbrella in Seattle tomorrow?" answered from Tomorrow's 100% chance of rain (4.1 s), and a Chicago "right now and this weekend" question that used both tools in one round (7.5 s). The real Streamlit server rendered the table with no console warnings.
+- **Changes:**
+  - `weather_chatbot/weather.py` — `FORECAST_URL`, `FORECAST_DAYS`, `ENTRIES_PER_FULL_DAY`, `FORECAST_INCOMPLETE_MESSAGE`, `IncompleteForecastError`; the pure forecast logic `group_by_local_date`, `summarize_forecast`, `day_label`, `summarize_day`; `parse_forecast`, `utc_now`, `lookup_weather_forecast` and the `get_weather_forecast` tool. The validate → geocode → fetch → catch-errors path moved into a shared `look_up_weather()`, and `CurrentWeatherInput` became `CityInput`, used by both tools. `WEATHER_TOOLS` holds both tools.
+  - `app.py` — `CARD_KINDS`, `forecast_rows`, `render_forecast` (an `st.dataframe` with `alt`, plus a caption when a day is partial) and `render_card`, which picks the card type; caption mentions forecasts.
+  - `tests/test_forecast.py` — new: the two TDD tests plus ordinary tests for short responses, a missing `pop`, the Seattle sample, the lookup path, invalid cities, service failures, the tool schema and units.
+  - `tests/conftest.py`, `tests/fixtures/openweather/geocode_seattle.json`, `forecast_seattle.json` — the fake answers forecast requests and fixes the clock at `SAMPLE_NOW`; made-up Seattle samples in OpenWeather's format.
+  - `tests/test_agent.py` — both tools bound; one question uses both tools within the round limit. `tests/test_app.py` — the forecast table renders and stays after another message.
+  - `docs/ARCHITECTURE.md`, `docs/TESTING.md`, `docs/SECURITY.md`, `CLAUDE.md` — new names, the forecast flow, the fixed-offset limitation, test files and patterns, the plain-text table rule.
+  - `plans/weather-chatbot.md` — Phase 3 criteria ticked.
+- **TDD:** Two behaviors, each red on an assertion against a stub, then green: (1) entries are grouped by local date into exactly five days, with four cases: Seattle (UTC−8) crossing UTC midnight with a sixth date dropped, Tokyo (UTC+9) and São Paulo (UTC−3) starting at local midnight, and a date before today dropped with a partial last day; (2) each day's high, low, most common condition (tie goes to the first in the day), chance of rain, Today/Tomorrow/weekday label and partial flag, including a pop value from after UTC midnight that still belongs to the local day.
+- **Decisions:** A day is partial when the response has fewer than 8 entries for that local date, each day counted on its own (the user's definition). "Today" is the city's local date from an injected `now` (`utc_now()` by default), so days can be labeled Today and Tomorrow for practical advice; dates before today are dropped. High and low use `temp_max` and `temp_min`; chance of rain is the highest `pop` as a whole percent, and a missing `pop` counts as 0. Fewer than five dates gives a `forecast_incomplete` error result that Grok words, like "city not found". The table uses `st.dataframe` because `st.table` renders Markdown in cells. The system prompt is unchanged (Phase 6). The fixed UTC offset is documented as a limitation.
+- **Deviations:** The user defined partial days precisely and asked for UTC-midnight crossings at both positive and negative offsets; the proposal already matched, and a São Paulo (UTC−3) local-midnight case was added so both signs are covered for both crossing and midnight starts. After the second TDD cycle went green, the build continued without a separate stop, because the user had said "move to development".
+- **Sideways:** Updating the module docstring tripped ruff's line length twice, and the new agent-test import was out of order; both were fixed. The Phase 2 test asserting only `get_current_weather` was bound failed as expected and was updated. `streamlit docs` crashed on the Windows console encoding and needed `PYTHONIOENCODING=utf-8`. The live Chicago forecast had no "Today" because it was 22:50 locally and no hours were left that day; the five days started with Tomorrow, all full, which matches the rule.
+
+---
+
 ## 2026-11-06 — Weather chatbot: Phase 2/8, Current weather, end to end
 
 ### Prompts

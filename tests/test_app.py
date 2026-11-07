@@ -39,12 +39,12 @@ class BrokenFakeModel:
         raise RuntimeError("500 from https://api.x.ai/v1/chat/completions")
 
 
-def asks_for_weather_in(city: str) -> AIMessage:
-    """A model reply that calls get_current_weather for ``city``."""
+def asks_for_weather_in(city: str, tool: str = "get_current_weather") -> AIMessage:
+    """A model reply that calls ``tool`` (current weather by default) for ``city``."""
     call = {
-        "name": "get_current_weather",
+        "name": tool,
         "args": {"city": city},
-        "id": f"call_{city}",
+        "id": f"call_{tool}_{city}",
         "type": "tool_call",
     }
     return AIMessage(content="", tool_calls=[call])
@@ -175,6 +175,61 @@ def test_weather_card_shows_in_the_reply_and_stays_in_history(
     assert len(replies) == 2
     assert card_metrics(replies[0]) == expected_tiles
     assert len(replies[1].metric) == 0
+
+
+# The Seattle forecast sample, as the table shows it (the clock is fixed at
+# 15:00 on Friday, Nov 6 in Seattle by the fake OpenWeather).
+SEATTLE_TABLE = [
+    ["Today, Nov 6 (partial)", "53°F / 47°F", "Light rain", "64%"],
+    ["Tomorrow, Nov 7", "52°F / 44°F", "Moderate rain", "100%"],
+    ["Sunday, Nov 8", "51°F / 44°F", "Broken clouds", "24%"],
+    ["Monday, Nov 9", "51°F / 41°F", "Clear sky", "0%"],
+    ["Tuesday, Nov 10", "50°F / 42°F", "Few clouds", "41%"],
+]
+
+
+def forecast_table(message) -> list[list[str]]:
+    """The rows of the one forecast table inside a chat message."""
+    (table,) = message.dataframe
+    assert list(table.value.columns) == [
+        "Day",
+        "High / Low",
+        "Condition",
+        "Chance of rain",
+    ]
+    return table.value.values.tolist()
+
+
+def test_forecast_table_shows_in_the_reply_and_stays_in_history(
+    use_env_file, fake_openweather, monkeypatch
+):
+    use_env_file(BOTH_KEYS)
+    fake = ScriptedFakeModel(
+        asks_for_weather_in("Seattle", tool="get_weather_forecast"),
+        AIMessage(content="Yes, bring an umbrella: tomorrow has a 100% chance."),
+        AIMessage(content="You're welcome!"),
+    )
+    monkeypatch.setattr(agent, "create_model", lambda: fake)
+    at = AppTest.from_file(APP).run()
+
+    at.chat_input[0].set_value("Umbrella in Seattle tomorrow?").run()
+
+    assert not at.exception
+    first_reply = assistant_messages(at)[0]
+    assert first_reply.markdown[0].value.startswith("Yes, bring an umbrella")
+    assert [t.value for t in first_reply.text] == [
+        "5-day forecast: Seattle, Washington, US"
+    ]
+    assert forecast_table(first_reply) == SEATTLE_TABLE
+    assert len(first_reply.metric) == 0  # no current-weather tiles
+
+    # A new message re-renders the page; the table must still be there.
+    at.chat_input[0].set_value("Thanks!").run()
+
+    assert not at.exception
+    replies = assistant_messages(at)
+    assert forecast_table(replies[0]) == SEATTLE_TABLE
+    assert len(replies[1].dataframe) == 0
 
 
 def test_a_failing_xai_call_shows_a_friendly_message(use_env_file, monkeypatch):

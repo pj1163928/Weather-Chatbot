@@ -4,6 +4,7 @@ Run with:  uv run streamlit run app.py
 """
 
 import logging
+from datetime import date
 from typing import Any
 
 import streamlit as st
@@ -29,6 +30,9 @@ UNIT_LABELS: dict[str, tuple[str, str]] = {
 # OpenWeather's icon images. The code is checked by the weather module first.
 ICON_URL = "https://openweathermap.org/img/wn/{code}@2x.png"
 
+# Tool results with these kinds are drawn as cards. Errors are not.
+CARD_KINDS: tuple[str, ...] = ("current_weather", "forecast")
+
 logger = logging.getLogger(__name__)
 
 
@@ -40,7 +44,7 @@ def get_model():
 
 def weather_cards(tool_results: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Keep the tool results that can be drawn as cards (successful lookups)."""
-    return [result for result in tool_results if result["kind"] == "current_weather"]
+    return [result for result in tool_results if result["kind"] in CARD_KINDS]
 
 
 def render_current_weather(card: dict[str, Any]) -> None:
@@ -74,9 +78,62 @@ def render_current_weather(card: dict[str, Any]) -> None:
             st.metric("Wind", f"{round(card['wind_speed'])} {speed_unit}", border=True)
 
 
+def forecast_rows(card: dict[str, Any]) -> list[dict[str, str]]:
+    """Turn a forecast tool result into the table's rows, one per day.
+
+    For example: {"Day": "Today, Nov 6 (partial)", "High / Low": "53°F / 47°F",
+    "Condition": "Light rain", "Chance of rain": "64%"}.
+    """
+    temperature_unit, _ = UNIT_LABELS[card["units"]]
+    rows = []
+    for day in card["days"]:
+        when = date.fromisoformat(day["date"])
+        name = f"{day['label']}, {when:%b} {when.day}"
+        if day["partial"]:
+            name += " (partial)"
+        rows.append(
+            {
+                "Day": name,
+                "High / Low": (
+                    f"{round(day['high'])}{temperature_unit} / "
+                    f"{round(day['low'])}{temperature_unit}"
+                ),
+                "Condition": day["condition"].capitalize(),
+                "Chance of rain": f"{day['chance_of_rain']}%",
+            }
+        )
+    return rows
+
+
+def render_forecast(card: dict[str, Any]) -> None:
+    """Draw the 5-day forecast table from a raw tool result, never from model text.
+
+    ``st.dataframe`` shows cells as plain text (unlike ``st.table``, which
+    renders Markdown), so OpenWeather's text can't add formatting or links.
+    """
+    with st.container(border=True):
+        st.text(f"5-day forecast: {card['location']}")
+        st.dataframe(
+            forecast_rows(card),
+            hide_index=True,
+            height="content",
+            alt=f"5-day forecast for {card['location']}",
+        )
+        if any(day["partial"] for day in card["days"]):
+            st.caption("A partial day covers only the hours the forecast includes.")
+
+
+def render_card(card: dict[str, Any]) -> None:
+    """Draw one weather card: current-weather tiles or the forecast table."""
+    if card["kind"] == "forecast":
+        render_forecast(card)
+    else:
+        render_current_weather(card)
+
+
 st.set_page_config(page_title="Weather Chatbot", page_icon="🌦️")
 st.title("🌦️ Weather Chatbot")
-st.caption("Ask about the current weather for a city.")
+st.caption("Ask about the current weather or the 5-day forecast for a city.")
 
 # Startup key check: stop before any model is created or API call is made.
 problems = check_keys(load_env())
@@ -93,7 +150,7 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
         for card in message.get("cards", []):
-            render_current_weather(card)
+            render_card(card)
 
 if prompt := st.chat_input("Ask about the weather in a city…"):
     st.session_state.messages.append({"role": "user", "content": prompt})
@@ -113,7 +170,7 @@ if prompt := st.chat_input("Ask about the weather in a city…"):
                 reply, cards = UNAVAILABLE_MESSAGE, []
         st.markdown(reply)
         for card in cards:
-            render_current_weather(card)
+            render_card(card)
     st.session_state.messages.append(
         {"role": "assistant", "content": reply, "cards": cards}
     )

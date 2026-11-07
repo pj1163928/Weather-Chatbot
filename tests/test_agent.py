@@ -12,6 +12,7 @@ from langchain_xai import ChatXAI
 from weather_chatbot.agent import (
     EMPTY_REPLY_MESSAGE,
     MAX_REPLY_TOKENS,
+    MAX_TOOL_ROUNDS,
     SYSTEM_PROMPT,
     create_model,
     run_agent,
@@ -50,12 +51,12 @@ def test_run_agent_returns_the_model_reply_text():
     assert result.tool_results == []
 
 
-def test_get_current_weather_is_bound_with_bind_tools():
+def test_both_weather_tools_are_bound_with_bind_tools():
     model = RecordingFakeModel(AIMessage(content="ok"))
 
     run_agent(model, "What's the weather in Chicago?")
 
-    assert model.bound_tool_names == ["get_current_weather"]
+    assert model.bound_tool_names == ["get_current_weather", "get_weather_forecast"]
 
 
 def test_every_request_starts_with_the_system_prompt():
@@ -99,6 +100,42 @@ def test_tool_result_goes_back_to_the_model_and_to_the_ui(fake_openweather):
     tool_message = model.calls[1][-1]
     assert isinstance(tool_message, ToolMessage)
     assert json.loads(tool_message.content)["temperature"] == 59.02
+
+
+def test_one_question_can_use_both_tools_within_the_round_limit(fake_openweather):
+    # "Is it raining in Seattle now, and should I bring an umbrella tomorrow?"
+    # The model asks for both tools in one round, then answers.
+    both = AIMessage(
+        content="",
+        tool_calls=[
+            {
+                "name": "get_current_weather",
+                "args": {"city": "Seattle"},
+                "id": "call_now",
+                "type": "tool_call",
+            },
+            {
+                "name": "get_weather_forecast",
+                "args": {"city": "Seattle"},
+                "id": "call_forecast",
+                "type": "tool_call",
+            },
+        ],
+    )
+    answer = "It's dry now, but tomorrow has a 100% chance of rain: bring one."
+    model = RecordingFakeModel(both, AIMessage(content=answer))
+
+    result = run_agent(model, "Rain in Seattle now? Umbrella tomorrow?")
+
+    assert result.reply == answer
+    assert [r["kind"] for r in result.tool_results] == ["current_weather", "forecast"]
+    assert len(model.calls) == 2 <= MAX_TOOL_ROUNDS + 1
+    # Each call got its own answer, and the forecast data reached the model.
+    answers = {m.tool_call_id: m for m in model.calls[1] if isinstance(m, ToolMessage)}
+    assert set(answers) == {"call_now", "call_forecast"}
+    tomorrow = json.loads(answers["call_forecast"].content)["days"][1]
+    assert tomorrow["label"] == "Tomorrow"
+    assert tomorrow["chance_of_rain"] == 100
 
 
 def test_the_api_key_never_reaches_the_model(fake_openweather):
