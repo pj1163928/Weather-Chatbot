@@ -11,6 +11,7 @@ import pytest
 from langchain_core.messages import AIMessage, ToolMessage
 
 import weather_chatbot.weather as weather
+from tests.conftest import log_lines
 from weather_chatbot.agent import MAX_TOOL_ROUNDS, TOOL_LIMIT_MESSAGE, run_agent
 
 # Different real-looking cities, so no call ever repeats an earlier one.
@@ -77,7 +78,7 @@ def tool_ran_for(monkeypatch) -> list[str]:
 
 
 def test_tool_loop_stops_after_three_rounds_with_a_safe_message(
-    fake_openweather, tool_ran_for
+    fake_openweather, tool_ran_for, security_log
 ):
     model = ToolHungryFakeModel()
 
@@ -96,9 +97,14 @@ def test_tool_loop_stops_after_three_rounds_with_a_safe_message(
     assert tool_ran_for == ["Paris", "London", "Tokyo"]
     assert "Berlin" not in fake_openweather.geocoded
 
+    # The stop is written to the security log once, with the question.
+    (line,) = log_lines(security_log)
+    assert "| layer=loop_limit | reason=tool_round_limit |" in line
+    assert line.endswith('snippet="What\'s the weather in Paris?"')
+
 
 def test_repeated_identical_tool_call_is_blocked_but_a_new_city_runs(
-    fake_openweather, tool_ran_for
+    fake_openweather, tool_ran_for, security_log
 ):
     final_answer = "Paris is 59°F with light rain; London is 52°F and cloudy."
     model = ScriptedFakeModel(
@@ -133,3 +139,7 @@ def test_repeated_identical_tool_call_is_blocked_but_a_new_city_runs(
 
     # The loop carried on and returned the model's final answer.
     assert result.reply == final_answer
+
+    # The one blocked repeat is written to the security log once.
+    (line,) = log_lines(security_log)
+    assert "| layer=loop_limit | reason=repeated_tool_call |" in line

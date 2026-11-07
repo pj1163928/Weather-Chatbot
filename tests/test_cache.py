@@ -10,7 +10,7 @@ from datetime import timedelta
 import pytest
 
 import weather_chatbot.weather as weather
-from tests.conftest import SAMPLE_NOW
+from tests.conftest import SAMPLE_NOW, FakeClock
 from weather_chatbot.weather import (
     CACHE_TTL_SECONDS,
     MAX_CACHE_ENTRIES,
@@ -19,19 +19,6 @@ from weather_chatbot.weather import (
     lookup_current_weather,
     lookup_weather_forecast,
 )
-
-
-class FakeClock:
-    """A clock that only moves when a test moves it."""
-
-    def __init__(self) -> None:
-        self.now = 1000.0
-
-    def __call__(self) -> float:
-        return self.now
-
-    def advance(self, seconds: float) -> None:
-        self.now += seconds
 
 
 @pytest.fixture

@@ -26,3 +26,7 @@ uv sync                          # install the pinned dependencies
 uv run streamlit run app.py      # start the chat at http://localhost:8501
 uv run pytest                    # run the tests (no API keys needed)
 ```
+
+Blocked messages (rate limits and the pre-filter) are recorded in
+`logs/security.log`, one line each, with keys redacted. The folder is
+gitignored and created on the first block.

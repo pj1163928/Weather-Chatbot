@@ -78,6 +78,21 @@ def setup_message(problems: list[str]) -> str:
     )
 
 
+def secret_values() -> list[str]:
+    """Return the configured key values, so the security log can redact them.
+
+    Only the security module's redaction calls this. Blank and placeholder
+    values are left out: they aren't secrets, and redacting a blank value
+    would break the text. Never log, show or send the returned values.
+    """
+    values: list[str] = []
+    for name in REQUIRED_KEYS:
+        value = os.environ.get(name, "").strip()
+        if value and not check_keys({name: value}, (name,)):
+            values.append(value)
+    return values
+
+
 def openweather_key() -> str:
     """Return the OpenWeather key for the weather module's API requests only.
 

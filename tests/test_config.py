@@ -6,7 +6,12 @@ These prove only that a key is configured and not a placeholder. They don't
 
 import pytest
 
-from weather_chatbot.config import check_keys, openweather_key, setup_message
+from weather_chatbot.config import (
+    check_keys,
+    openweather_key,
+    secret_values,
+    setup_message,
+)
 
 # Obviously fake, but shaped like real configured values.
 CONFIGURED = "xai-test0000000000000000000000000000000000000000"
@@ -78,3 +83,22 @@ def test_openweather_key_reads_the_environment(monkeypatch):
     monkeypatch.setenv("OPENWEATHER_API_KEY", f"  {CONFIGURED_OW}  ")
 
     assert openweather_key() == CONFIGURED_OW
+
+
+def test_secret_values_gives_the_configured_keys_for_redaction(monkeypatch):
+    monkeypatch.setenv("XAI_API_KEY", f" {CONFIGURED} ")
+    monkeypatch.setenv("OPENWEATHER_API_KEY", CONFIGURED_OW)
+
+    assert secret_values() == [CONFIGURED, CONFIGURED_OW]
+
+
+@pytest.mark.parametrize("value", UNCONFIGURED)
+def test_secret_values_leaves_out_blank_and_placeholder_keys(monkeypatch, value):
+    # Redacting a blank value would break the text; placeholders aren't secret.
+    if value is None:
+        monkeypatch.delenv("XAI_API_KEY", raising=False)
+    else:
+        monkeypatch.setenv("XAI_API_KEY", value)
+    monkeypatch.setenv("OPENWEATHER_API_KEY", CONFIGURED_OW)
+
+    assert secret_values() == [CONFIGURED_OW]

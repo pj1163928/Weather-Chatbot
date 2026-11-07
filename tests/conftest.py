@@ -1,12 +1,14 @@
 """Shared test helpers: a fake OpenWeather that answers from saved sample JSON."""
 
 import json
+import logging
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+import weather_chatbot.security as security
 import weather_chatbot.weather as weather
 
 FIXTURES = Path(__file__).parent / "fixtures" / "openweather"
@@ -39,6 +41,22 @@ SAMPLE_FORECASTS: dict[int, str] = {
 # The moment the forecast samples were "fetched": 15:00 on Friday, Nov 6 in
 # Seattle. The fake fixes the clock here, so "Today" is always Nov 6.
 SAMPLE_NOW = datetime(2026, 11, 6, 23, 0, tzinfo=UTC)
+
+
+class FakeClock:
+    """A clock that only moves when a test moves it, so no test waits.
+
+    Used by the weather cache and the rate limiter.
+    """
+
+    def __init__(self) -> None:
+        self.now = 1000.0
+
+    def __call__(self) -> float:
+        return self.now
+
+    def advance(self, seconds: float) -> None:
+        self.now += seconds
 
 
 def load_fixture(name: str) -> Any:
@@ -114,3 +132,26 @@ def fake_openweather(monkeypatch) -> FakeOpenWeather:
     monkeypatch.setattr(weather, "utc_now", lambda: SAMPLE_NOW)
     monkeypatch.setenv("OPENWEATHER_API_KEY", FAKE_OW_KEY)
     return fake
+
+
+@pytest.fixture(autouse=True)
+def security_log(tmp_path, monkeypatch) -> Path:
+    """Send the security log to a temporary file, so tests never write logs/.
+
+    Returns the file's path. It exists only once something has been logged.
+    The file is closed afterwards, so Windows can delete the temporary folder.
+    """
+    log_file = tmp_path / "logs" / "security.log"
+    monkeypatch.setattr(security, "LOG_PATH", log_file)
+    yield log_file
+    logger = logging.getLogger(security.SECURITY_LOGGER_NAME)
+    for handler in list(logger.handlers):
+        logger.removeHandler(handler)
+        handler.close()
+
+
+def log_lines(log_file: Path) -> list[str]:
+    """The lines written to the security log so far (none if it doesn't exist)."""
+    if not log_file.exists():
+        return []
+    return log_file.read_text(encoding="utf-8").splitlines()

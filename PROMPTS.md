@@ -5,6 +5,48 @@ and the decisions made along the way. Newest entries first.
 
 ---
 
+## 2026-11-06 — Weather chatbot: Phase 5/8, Free gate (rate limits, pre-filter, security log)
+
+### Prompts
+
+1. The `/implement` skill, given `weather-chatbot phase 5`.
+2. "Approved, with two security refinements: 1. Secret redaction: Ensure redact() handles secrets case-insensitively where appropriate and never logs a partial secret, including when the secret appears inside a longer string. 2. Rate-limit ordering: Confirm the session cap and cooldown are checked before the pre-filter, and that a message blocked by the pre-filter still consumes one allowed-message slot, as specified."
+3. "Looks good move to next test" (approved the red session-cap test).
+4. "Looks good move to next" (approved the red cooldown test).
+5. "Looks good move to next" (approved the red pre-filter test).
+
+### Summary
+
+- **Outcome:** A free gate now runs before any Grok call: 20 messages per session, a 3-second cooldown, a 300-character cap and attack-phrase matching. Each block shows a fixed refusal in a warning box and writes one redacted line to `logs/security.log`. The agent loop's tool-round cap and repeated-call block also log there (layer `loop_limit`). 265 tests pass (107 new). `ruff check` and `ruff format` are clean; the project has no type checker. The real Streamlit server was driven through the agent API with three blocked messages (attack, too soon, too long). Each showed its warning and wrote one log line, the console showed no warnings, and no Grok or OpenWeather call was made.
+- **Changes:**
+  - `weather_chatbot/security.py` — new. The limits as named constants, `ATTACK_PATTERNS`, the fixed refusals and layer names, `Block`, the frozen `UsageCounters`, `RateLimiter` (injectable clock, default `monotonic_now()`), `normalize_for_matching()`, `prefilter()`, `check_free_gate()`, `redact()`, `make_snippet()`, `security_logger()` and `log_block()`.
+  - `weather_chatbot/config.py` — `secret_values()`, the configured key values for redaction only.
+  - `weather_chatbot/agent.py` — the two "Phase 5" stand-ins now call `log_block()`. `trim_history()` skips messages marked `blocked`.
+  - `app.py` — trims the question, runs the gate before the spinner, marks blocked messages, and draws refusals with the new `render_reply()` as `st.warning` (`BLOCKED_ICON`).
+  - `tests/test_rate_limit.py`, `tests/test_prefilter.py`, `tests/test_security_log.py` — new. `tests/conftest.py` — `FakeClock` (moved from `test_cache.py`), the autouse `security_log` fixture and `log_lines()`. `tests/test_app.py` — an autouse `PatientClock`, plus zero-Grok-call tests for every block type, the counter checks and blocked history. `tests/test_agent_loop.py`, `tests/test_history.py`, `tests/test_config.py` — loop-limit log lines, blocked history and `secret_values()`.
+  - `docs/SECURITY.md`, `docs/ARCHITECTURE.md`, `docs/TESTING.md`, `CLAUDE.md`, `README.md` — the gate, the log, the new module and tests, and the current-state summary. `plans/weather-chatbot.md` — all nine Phase 5 criteria ticked.
+- **TDD:** Three behaviors, each red on an assertion against a stub, then green:
+  - the session cap allows messages 1–20 and blocks 21 and 22
+  - the cooldown blocks at 2.99 s and allows at exactly 3.00 s; the first message is always allowed, and a blocked attempt doesn't restart the wait
+  - the pre-filter blocks 301 characters (padded or not) and each attack phrase in any case or simple disguise, and lets 300 characters and 15 ordinary weather questions through, including "Is a storm system heading to Miami?"
+- **Decisions:**
+  - The limiter counts a message only when it lets it through, so a pre-filter block uses a slot and a rate-limit block changes nothing. The cap is checked before the cooldown, and both before the pre-filter.
+  - The counters are one frozen record in their own session-state entry, which only `RateLimiter.check()` replaces. A test checks that no other module mentions its key.
+  - Length is counted after trimming spaces at both ends, and the trimmed text is what goes to Grok.
+  - Attack matching runs on normalized text (NFKC, invisible characters removed, whitespace joined, lower case), and each pattern needs its whole phrase. Users see one generic refusal; the log names the pattern.
+  - Blocked messages stay on screen but never go back to Grok as history.
+  - Snippets are redacted before being cut to 100 characters, then JSON-quoted with non-ASCII escaped, so no user text can start a fake log line.
+  - Redaction removes the loaded key values (any case, longest first, no word boundaries), then `xai-` style keys and hex runs of 32 or more.
+  - The security logger doesn't propagate to the terminal. The chat box has no `max_chars`, so the 301-character block can be seen.
+- **Deviations:** The user asked for case-insensitive redaction with no partial secret left (including inside longer strings) and for a confirmed check order (rate limits before the pre-filter, with a pre-filter block using a slot). Both were built and tested: there are tests for keys in any case, inside URLs, glued to text, across the 100-character cut and one inside the other, plus tests of the gate's order and slot use. After each green, the build continued without a separate stop, because the user had said to move on.
+- **Sideways:**
+  - The first full run failed two app tests: they sent messages back to back and hit the new cooldown. The same run wrote the real `logs/security.log`, which was deleted (it held only test text). The autouse `security_log` and `PatientClock` fixtures fixed both.
+  - Python heredocs mangled escapes three times: a `\'` in a loop test, a `\n` in an app test and a `\r` in `SECURITY.md`. The last became a real carriage return, which made git treat the file as not text. All three were repaired by hand.
+  - A mutation check flipped each boundary operator in turn. The cap, cooldown, length and cut-after-redaction mutations were all caught, but making exact-key matching case-sensitive was not, because the key-shaped fake keys were also caught by the key-like patterns. Tests with non-key-shaped keys were added, and that mutation and the longest-first mutation now fail.
+  - The live check showed a 301-`a` snippet logged as `[REDACTED]`, since 32+ `a`s look like a hex key. This was kept (it only affects the log, on the safe side) and documented as a gotcha.
+
+---
+
 ## 2026-11-06 — Weather chatbot: Forecast tiles fit and smoother scrolling
 
 ### Prompts

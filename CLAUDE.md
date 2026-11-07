@@ -7,9 +7,11 @@ answers current-weather and 5-day forecast questions through the
 `get_current_weather` and `get_weather_forecast` tools and a capped
 tool-calling loop, and shows a weather card or a forecast table in the chat.
 A sidebar °F/°C toggle sets the units, the last 2 exchanges are sent as
-memory for follow-ups, and lookups are cached for 10 minutes. The layered
-security pipeline is still planned. The plan's ticked
-criteria show what is done.
+memory for follow-ups, and lookups are cached for 10 minutes. A free gate
+runs before any Grok call: 20 messages per session, a 3-second cooldown, a
+300-character cap and attack-phrase matching, with each block written as one
+redacted line to `logs/security.log`. The classifier, hardened prompt and
+output scan are still planned. The plan's ticked criteria show what is done.
 
 The developer is a beginner, so code should favor clarity.
 

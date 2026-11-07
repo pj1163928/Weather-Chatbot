@@ -5,7 +5,6 @@ security limits are visible constants below.
 """
 
 import json
-import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any, Protocol
@@ -21,14 +20,13 @@ from langchain_core.tools import BaseTool
 from langchain_xai import ChatXAI
 from pydantic import ValidationError
 
+from weather_chatbot.security import LAYER_LOOP_LIMIT, log_block
 from weather_chatbot.weather import (
     DEFAULT_UNITS,
     REQUEST_TIMEOUT_SECONDS,
     WEATHER_TOOLS,
     error_result,
 )
-
-logger = logging.getLogger(__name__)
 
 # The only model this app uses, for every Grok call.
 MODEL_NAME: str = "grok-4.7"
@@ -117,12 +115,18 @@ def trim_history(chat_history: Sequence[dict[str, Any]]) -> list[dict[str, str]]
 
     An exchange is a user message followed directly by the assistant's reply.
     Only ``user`` and ``assistant`` messages count; any other role (system,
-    tool) is skipped. A user message with no reply, or a reply with no
-    question before it, is not a complete exchange and is dropped. Each kept
-    message has only its ``role`` and ``content``, so weather cards and tool
-    data are never sent back to the model. The result is oldest first.
+    tool) is skipped, and so is any message marked ``blocked`` by the free
+    gate, so a blocked attack never reaches the model as history. A user
+    message with no reply, or a reply with no question before it, is not a
+    complete exchange and is dropped. Each kept message has only its
+    ``role`` and ``content``, so weather cards and tool data are never sent
+    back to the model. The result is oldest first.
     """
-    chat = [m for m in chat_history if m.get("role") in ("user", "assistant")]
+    chat = [
+        m
+        for m in chat_history
+        if m.get("role") in ("user", "assistant") and not m.get("blocked")
+    ]
     exchanges: list[tuple[str, str]] = []
     for earlier, later in zip(chat, chat[1:], strict=False):
         if earlier["role"] == "user" and later["role"] == "assistant":
@@ -214,8 +218,7 @@ def run_agent(
             if signature in calls_already_run:
                 # Same tool, same arguments: don't run it again. The model
                 # still gets an answer, because every tool call needs one.
-                # Phase 5 writes this to the security log (layer: loop limit).
-                logger.warning("Blocked a repeated tool call: %s", call["name"])
+                log_block(LAYER_LOOP_LIMIT, "repeated_tool_call", user_text)
                 result = error_result("repeated_call", REPEATED_CALL_MESSAGE)
             else:
                 calls_already_run.add(signature)
@@ -228,6 +231,5 @@ def run_agent(
                 )
             )
 
-    # Phase 5 writes this to the security log (layer: loop limit).
-    logger.warning("Tool loop stopped after %d rounds", MAX_TOOL_ROUNDS)
+    log_block(LAYER_LOOP_LIMIT, "tool_round_limit", user_text)
     return AgentResult(reply=TOOL_LIMIT_MESSAGE, tool_results=tool_results)

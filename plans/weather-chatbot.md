@@ -209,15 +209,15 @@ The rate limiter takes an **injectable clock** (a time source passed in), so tes
 
 ### Acceptance criteria
 
-- [ ] Blocked messages never consume a Grok call, neither the classifier (once it exists) nor the main agent. This is verified by a test with a fake model client that records every call and shows zero calls for each blocked case.
-- [ ] The limits can't be bypassed through session state. Tests confirm that clearing chat history leaves the counters intact, that blocked attempts are still counted correctly, and that the counters are only modified through the limiter.
-- [ ] **20-message limit:** tests confirm messages 1–20 are allowed and message 21 is blocked.
-- [ ] **3-second cooldown:** tests with a controllable clock confirm a message at 2.99 s is blocked and one at exactly 3.00 s is allowed (and the first message of a session is always allowed). No test uses real sleeping.
-- [ ] **300-character limit:** tests confirm 300 characters pass and 301 are blocked, including a whitespace-padding case.
-- [ ] Tests confirm each attack pattern from the brief is blocked case-insensitively, and that ordinary weather questions aren't falsely blocked, including ones that use attack-adjacent words in a weather sense (for example, "Is a storm system heading to Miami?").
-- [ ] Each block writes exactly one log line with the correct layer name.
-- [ ] A test sends blocked input that deliberately contains both real key values (test fakes) and key-like strings, then confirms the log shows `[REDACTED]` and none of the keys.
-- [ ] `logs/` is gitignored.
+- [x] Blocked messages never consume a Grok call, neither the classifier (once it exists) nor the main agent. This is verified by a test with a fake model client that records every call and shows zero calls for each blocked case.
+- [x] The limits can't be bypassed through session state. Tests confirm that clearing chat history leaves the counters intact, that blocked attempts are still counted correctly, and that the counters are only modified through the limiter.
+- [x] **20-message limit:** tests confirm messages 1–20 are allowed and message 21 is blocked.
+- [x] **3-second cooldown:** tests with a controllable clock confirm a message at 2.99 s is blocked and one at exactly 3.00 s is allowed (and the first message of a session is always allowed). No test uses real sleeping.
+- [x] **300-character limit:** tests confirm 300 characters pass and 301 are blocked, including a whitespace-padding case.
+- [x] Tests confirm each attack pattern from the brief is blocked case-insensitively, and that ordinary weather questions aren't falsely blocked, including ones that use attack-adjacent words in a weather sense (for example, "Is a storm system heading to Miami?").
+- [x] Each block writes exactly one log line with the correct layer name.
+- [x] A test sends blocked input that deliberately contains both real key values (test fakes) and key-like strings, then confirms the log shows `[REDACTED]` and none of the keys.
+- [x] `logs/` is gitignored.
 
 ### TDD recommendation
 
