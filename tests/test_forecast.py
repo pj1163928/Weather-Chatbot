@@ -39,12 +39,21 @@ def entry(
     high: float = 55.0,
     condition: str = "clear sky",
     pop: float = 0.0,
+    humidity: int = 80,
+    wind: float = 5.0,
+    icon: str = "01d",
 ) -> dict:
     """One 3-hour forecast entry. ``when`` is in UTC, as OpenWeather sends it."""
     return {
         "dt": int(when.timestamp()),
-        "main": {"temp": (low + high) / 2, "temp_min": low, "temp_max": high},
-        "weather": [{"description": condition, "icon": "01d"}],
+        "main": {
+            "temp": (low + high) / 2,
+            "temp_min": low,
+            "temp_max": high,
+            "humidity": humidity,
+        },
+        "weather": [{"description": condition, "icon": icon}],
+        "wind": {"speed": wind},
         "pop": pop,
         "dt_txt": when.strftime("%Y-%m-%d %H:%M:%S"),
     }
@@ -181,7 +190,10 @@ def test_each_day_is_summarized_from_its_own_entries():
         "high": 54.1,  # the largest temp_max of the day
         "low": 47.3,  # the smallest temp_min of the day
         "condition": "light rain",  # 2 of 3 entries
+        "icon": "01d",
         "chance_of_rain": 75,  # the highest pop (0.75), as a whole percent
+        "humidity": 80,
+        "wind_speed": 5.0,
         "partial": True,  # only 3 of 8 entries
     }
     assert days[1] == {
@@ -192,12 +204,71 @@ def test_each_day_is_summarized_from_its_own_entries():
         # "broken clouds" and "moderate rain" both appear 3 times. A tie goes
         # to the condition that appears first in the day.
         "condition": "broken clouds",
+        "icon": "01d",
         # 0.86 comes from 03:00 UTC Nov 8, which is still Nov 7 locally.
         "chance_of_rain": 86,
+        "humidity": 80,
+        "wind_speed": 5.0,
         "partial": False,
     }
     # Later days are named by weekday.
     assert [day["label"] for day in days[2:]] == ["Sunday", "Monday", "Tuesday"]
+
+
+def seattle_today(*entries: dict) -> dict:
+    """The first day of a Seattle forecast whose "today" is the given entries.
+
+    The entries should be on Nov 6 local time (after 23:00 UTC Nov 6 and
+    before 08:00 UTC Nov 7). Plain entries fill the rest of the five days.
+    """
+    later = every_3_hours(utc("2026-11-07 09:00"), 32)
+    data = forecast(list(entries) + later, utc_offset_hours=-8)
+    return summarize_forecast(data, utc("2026-11-06 23:00"))[0]
+
+
+def test_humidity_is_the_day_average_and_wind_the_day_maximum():
+    today = seattle_today(
+        entry(utc("2026-11-07 00:00"), humidity=70, wind=4.0),
+        entry(utc("2026-11-07 03:00"), humidity=85, wind=12.6),
+        entry(utc("2026-11-07 06:00"), humidity=90, wind=8.1),
+    )
+
+    assert today["humidity"] == 82  # (70 + 85 + 90) / 3 = 81.67, rounded
+    assert today["wind_speed"] == 12.6  # the windiest hour
+
+
+@pytest.mark.parametrize(
+    ("entries", "expected_icon"),
+    [
+        pytest.param(
+            [("light rain", "10n"), ("light rain", "10d"), ("clear sky", "01d")],
+            "10d",
+            id="night-icon-shown-as-daytime",
+        ),
+        pytest.param(
+            [("clear sky", "01d"), ("light rain", "10d"), ("light rain", "10n")],
+            "10d",
+            id="icon-follows-the-most-common-condition",
+        ),
+        pytest.param(
+            [("light rain", '10n"><script>'), ("light rain", "10n")],
+            None,
+            id="malformed-icon-code-dropped",
+        ),
+    ],
+)
+def test_the_day_icon_is_the_daytime_icon_of_the_most_common_condition(
+    entries, expected_icon
+):
+    times = ["2026-11-07 00:00", "2026-11-07 03:00", "2026-11-07 06:00"]
+    today = seattle_today(
+        *(
+            entry(utc(when), condition=condition, icon=icon)
+            for when, (condition, icon) in zip(times, entries, strict=False)
+        )
+    )
+
+    assert today["icon"] == expected_icon
 
 
 # --- The five-day rule: never fewer, never invented ----------------------------
@@ -249,6 +320,15 @@ def test_the_seattle_sample_becomes_five_local_days(sample_json):
         ("Monday", "2026-11-09", 50.6, 40.9, "clear sky", 0, False),
         ("Tuesday", "2026-11-10", 50.0, 42.3, "few clouds", 41, False),
     ]
+    # Icon (daytime version), average humidity and highest wind of each day.
+    details = [(d["icon"], d["humidity"], d["wind_speed"]) for d in days]
+    assert details == [
+        ("10d", 88, 13.6),
+        ("10d", 91, 14.9),
+        ("04d", 81, 10.9),
+        ("01d", 65, 7.4),
+        ("02d", 84, 14.9),
+    ]
 
 
 def test_parse_forecast_adds_location_and_units(sample_json):
@@ -260,6 +340,7 @@ def test_parse_forecast_adds_location_and_units(sample_json):
     assert result["location"] == "Seattle, Washington, US"
     assert result["units"] == "imperial"
     assert result["temperature_unit"] == "°F"
+    assert result["wind_speed_unit"] == "mph"
     assert len(result["days"]) == FORECAST_DAYS
 
 

@@ -247,21 +247,37 @@ def summarize_day(
     - ``high`` is the largest ``temp_max`` and ``low`` the smallest ``temp_min``.
     - ``condition`` is the most common description. A tie goes to the one that
       appears first in the day.
+    - ``icon`` is the icon of the first entry with that condition, as its
+      daytime version ("10n" becomes "10d"), the way weather apps show a day.
+      It is None if OpenWeather's code isn't well formed.
     - ``chance_of_rain`` is the highest ``pop`` (0 to 1) as a whole percent. A
       missing ``pop`` counts as 0.
+    - ``humidity`` is the average humidity, as a whole percent.
+    - ``wind_speed`` is the highest wind speed of the day.
     - ``partial`` is True when the day has fewer than ``ENTRIES_PER_FULL_DAY``
       entries.
     """
     # Counter.most_common lists equal counts in the order first seen, which
     # gives the "first in the day wins a tie" rule.
     conditions = Counter(item["weather"][0]["description"] for item in entries)
+    condition = conditions.most_common(1)[0][0]
+    icon = next(
+        str(item["weather"][0].get("icon", ""))
+        for item in entries
+        if item["weather"][0]["description"] == condition
+    )
+    humidities = [item["main"]["humidity"] for item in entries]
     return {
         "date": day.isoformat(),
         "label": day_label(day, today),
         "high": max(item["main"]["temp_max"] for item in entries),
         "low": min(item["main"]["temp_min"] for item in entries),
-        "condition": conditions.most_common(1)[0][0],
+        "condition": condition,
+        # Only a well-formed code is kept, because the UI builds a URL from it.
+        "icon": icon[:2] + "d" if ICON_PATTERN.fullmatch(icon) else None,
         "chance_of_rain": round(max(item.get("pop", 0) for item in entries) * 100),
+        "humidity": round(sum(humidities) / len(humidities)),
+        "wind_speed": max(item["wind"]["speed"] for item in entries),
         "partial": len(entries) < ENTRIES_PER_FULL_DAY,
     }
 
@@ -283,6 +299,7 @@ def parse_forecast(
         "location": location,
         "units": units,
         "temperature_unit": UNIT_LABELS[units][0],
+        "wind_speed_unit": UNIT_LABELS[units][1],
         "days": summarize_forecast(data, now),
     }
 
@@ -491,8 +508,9 @@ def get_weather_forecast(city: str, units: str = DEFAULT_UNITS) -> dict[str, Any
     practical advice such as whether to bring an umbrella. Returns the
     resolved location and five days, each with a label ("Today", "Tomorrow"
     or a weekday), its date, the high and low temperature, the most common
-    condition, the highest chance of rain in percent, and whether the day is
-    partial (only some hours of it are in the forecast).
+    condition, the highest chance of rain in percent, the average humidity in
+    percent, the highest wind speed, and whether the day is partial (only
+    some hours of it are in the forecast).
     """
     return lookup_weather_forecast(city, units)
 

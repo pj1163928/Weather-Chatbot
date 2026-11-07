@@ -94,41 +94,97 @@ def render_current_weather(card: dict[str, Any]) -> None:
             st.metric("Wind", f"{round(card['wind_speed'])} {speed_unit}", border=True)
 
 
+def short_date(day: dict[str, Any]) -> str:
+    """A forecast day's date, like "Nov 6"."""
+    when = date.fromisoformat(day["date"])
+    return f"{when:%b} {when.day}"
+
+
+def high_low(day: dict[str, Any], temperature_unit: str) -> str:
+    """A forecast day's temperatures, like "53°F / 47°F"."""
+    return (
+        f"{round(day['high'])}{temperature_unit} / "
+        f"{round(day['low'])}{temperature_unit}"
+    )
+
+
+def humidity_text(day: dict[str, Any]) -> str:
+    """A forecast day's average humidity, like "84%" ("–" if not known)."""
+    humidity = day.get("humidity")
+    return "–" if humidity is None else f"{humidity}%"
+
+
+def wind_text(day: dict[str, Any], speed_unit: str) -> str:
+    """A forecast day's highest wind speed, like "12 mph" ("–" if not known)."""
+    wind_speed = day.get("wind_speed")
+    return "–" if wind_speed is None else f"{round(wind_speed)} {speed_unit}"
+
+
 def forecast_rows(card: dict[str, Any]) -> list[dict[str, str]]:
     """Turn a forecast tool result into the table's rows, one per day.
 
     For example: {"Day": "Today, Nov 6 (partial)", "High / Low": "53°F / 47°F",
-    "Condition": "Light rain", "Chance of rain": "64%"}.
+    "Condition": "Light rain", "Chance of rain": "64%", "Humidity": "84%",
+    "Wind": "12 mph"}.
     """
-    temperature_unit, _ = UNIT_LABELS[card["units"]]
+    temperature_unit, speed_unit = UNIT_LABELS[card["units"]]
     rows = []
     for day in card["days"]:
-        when = date.fromisoformat(day["date"])
-        name = f"{day['label']}, {when:%b} {when.day}"
+        name = f"{day['label']}, {short_date(day)}"
         if day["partial"]:
             name += " (partial)"
         rows.append(
             {
                 "Day": name,
-                "High / Low": (
-                    f"{round(day['high'])}{temperature_unit} / "
-                    f"{round(day['low'])}{temperature_unit}"
-                ),
+                "High / Low": high_low(day, temperature_unit),
                 "Condition": day["condition"].capitalize(),
                 "Chance of rain": f"{day['chance_of_rain']}%",
+                "Humidity": humidity_text(day),
+                "Wind": wind_text(day, speed_unit),
             }
         )
     return rows
 
 
-def render_forecast(card: dict[str, Any]) -> None:
-    """Draw the 5-day forecast table from a raw tool result, never from model text.
+def render_forecast_day(day: dict[str, Any], units: str) -> None:
+    """Draw one day's tile: name, date, icon, condition, high/low, rain and wind.
 
-    ``st.dataframe`` shows cells as plain text (unlike ``st.table``, which
-    renders Markdown), so OpenWeather's text can't add formatting or links.
+    The day name, date and numbers are the app's own text. The condition comes
+    from OpenWeather, so it is shown with ``st.text`` (plain text).
+    """
+    temperature_unit, speed_unit = UNIT_LABELS[units]
+    st.markdown(f"**{day['label']}**", text_alignment="center")
+    when = short_date(day) + (" · partial" if day["partial"] else "")
+    st.caption(when, text_alignment="center")
+    if day.get("icon"):
+        with st.container(horizontal_alignment="center"):
+            st.image(ICON_URL.format(code=day["icon"]), width=56, alt=day["condition"])
+    st.text(day["condition"].capitalize(), text_alignment="center", width="stretch")
+    st.markdown(f"**{high_low(day, temperature_unit)}**", text_alignment="center")
+    st.markdown(
+        f":material/water_drop: {day['chance_of_rain']}%  \n"
+        f":material/air: {wind_text(day, speed_unit)}",
+        text_alignment="center",
+    )
+
+
+def render_forecast(card: dict[str, Any]) -> None:
+    """Draw the 5-day forecast from a raw tool result, never from model text.
+
+    A header with the location, a row of five day tiles like a weather app,
+    then a table with every detail. ``st.dataframe`` shows cells as plain text
+    (unlike ``st.table``, which renders Markdown), so OpenWeather's text can't
+    add formatting or links.
     """
     with st.container(border=True):
-        st.text(f"5-day forecast: {card['location']}")
+        with st.container(horizontal=True, vertical_alignment="center", gap="small"):
+            st.markdown(":material/location_on:")
+            st.text(card["location"])
+        st.caption("5-day forecast")
+        days = card["days"]
+        for column, day in zip(st.columns(len(days), border=True), days, strict=True):
+            with column:
+                render_forecast_day(day, card["units"])
         st.dataframe(
             forecast_rows(card),
             hide_index=True,
@@ -140,7 +196,7 @@ def render_forecast(card: dict[str, Any]) -> None:
 
 
 def render_card(card: dict[str, Any]) -> None:
-    """Draw one weather card: current-weather tiles or the forecast table."""
+    """Draw one weather card: current-weather tiles or the 5-day forecast."""
     if card["kind"] == "forecast":
         render_forecast(card)
     else:

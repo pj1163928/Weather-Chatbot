@@ -13,7 +13,7 @@
     "pressure": 1014,
     "sea_level": 1014,
     "grnd_level": 1009,
-    "humidity": 84,
+    "humidity": 78,
     "temp_kf": 0.56
    },
    "weather": [
@@ -28,9 +28,9 @@
     "all": 75
    },
    "wind": {
-    "speed": 7.4,
+    "speed": 7.0,
     "deg": 190,
-    "gust": 13.2
+    "gust": 11.2
    },
    "visibility": 10000,
    "pop": 0.32,
@@ -49,7 +49,7 @@
     "pressure": 1014,
     "sea_level": 1014,
     "grnd_level": 1009,
-    "humidity": 84,
+    "humidity": 91,
     "temp_kf": 0.56
    },
    "weather": [
@@ -64,9 +64,9 @@
     "all": 75
    },
    "wind": {
-    "speed": 7.4,
+    "speed": 12.3,
     "deg": 190,
-    "gust": 13.2
+    "gust": 19.7
    },
    "visibility": 10000,
    "pop": 0.58,
@@ -88,7 +88,7 @@
     "pressure": 1014,
     "sea_level": 1014,
     "grnd_level": 1009,
-    "humidity": 84,
+    "humidity": 94,
     "temp_kf": 0.56
    },
    "weather": [
@@ -103,9 +103,9 @@
     "all": 75
    },
    "wind": {
-    "speed": 7.4,
+    "speed": 13.6,
     "deg": 190,
-    "gust": 13.2
+    "gust": 21.8
    },
    "visibility": 10000,
    "pop": 0.64,
@@ -127,7 +127,7 @@
     "pressure": 1014,
     "sea_level": 1014,
     "grnd_level": 1009,
-    "humidity": 84,
+    "humidity": 88,
     "temp_kf": 0.56
    },
    "weather": [
@@ -142,9 +142,9 @@
     "all": 75
    },
    "wind": {
-    "speed": 7.4,
+    "speed": 14.9,
     "deg": 190,
-    "gust": 13.2
+    "gust": 23.8
    },
    "visibility": 10000,
    "pop": 0.71,
@@ -166,7 +166,7 @@
     "pressure": 1014,
     "sea_level": 1014,
     "grnd_level": 1009,
-    "humidity": 84,
+    "humidity": 91,
     "temp_kf": 0.56
    },
    "weather": [
@@ -181,9 +181,9 @@
     "all": 75
    },
    "wind": {
-    "speed": 7.4,
+    "speed": 11.0,
     "deg": 190,
-    "gust": 13.2
+    "gust": 17.6
    },
    "visibility": 10000,
    "pop": 0.92,
@@ -205,7 +205,7 @@
     "pressure": 1014,
     "sea_level": 1014,
     "grnd_level": 1009,
-    "humidity": 84,
+    "humidity": 94,
     "temp_kf": 0.56
    },
    "weather": [
@@ -220,9 +220,9 @@
     "all": 75
    },
    "wind": {
-    "speed": 7.4,
+    "speed": 12.3,
     "deg": 190,
-    "gust": 13.2
+    "gust": 19.7
    },
    "visibility": 10000,
    "pop": 1.0,
@@ -244,7 +244,7 @@
     "pressure": 1014,
     "sea_level": 1014,
     "grnd_level": 1009,
-    "humidity": 84,
+    "humidity": 88,
     "temp_kf": 0.56
    },
    "weather": [
@@ -259,9 +259,9 @@
     "all": 75
    },
    "wind": {
-    "speed": 7.4,
+    "speed": 13.6,
     "deg": 190,
-    "gust": 13.2
+    "gust": 21.8
    },
    "visibility": 10000,
    "pop": 0.96,
@@ -283,7 +283,7 @@
     "pressure": 1014,
     "sea_level": 1014,
     "grnd_level": 1009,
-    "humidity": 84,
+    "humidity": 91,
     "temp_kf": 0.56
    },
    "weather": [
@@ -298,9 +298,9 @@
     "all": 75
    },
    "wind": {
-    "speed": 7.4,
+    "speed": 14.9,
     "deg": 190,
-    "gust": 13.2
+    "gust": 23.8
    },
    "visibility": 10000,
    "pop": 0.88,
@@ -322,7 +322,7 @@
     "pressure": 1014,
     "sea_level": 1014,
     "grnd_level": 1009,
-    "humidity": 84,
+    "humidity": 94,
     "temp_kf": 0.56
    },
    "weather": [
@@ -337,9 +337,9 @@
     "all": 75
    },
    "wind": {
-    "speed": 7.4,
+    "speed": 11.0,
     "deg": 190,
-    "gust": 13.2
+    "gust": 17.6
    },
    "visibility": 10000,
    "pop": 0.9,
@@ -361,7 +361,7 @@
     "pressure": 1014,
     "sea_level": 1014,
     "grnd_level": 1009,
-    "humidity": 84,
+    "humidity": 88,
     "temp_kf": 0.56
    },
    "weather": [
@@ -376,9 +376,9 @@
     "all": 75
    },
    "wind": {
-    "speed": 7.4,
+    "speed": 12.3,
     "deg": 190,
-    "gust": 13.2
+    "gust": 19.7
    },
    "visibility": 10000,
    "pop": 0.94,
@@ -400,7 +400,7 @@
     "pressure": 1014,
     "sea_level": 1014,
     "grnd_level": 1009,
-    "humidity": 84,
+    "humidity": 91,
     "temp_kf": 0.56
    },
    "weather": [
@@ -415,9 +415,9 @@
     "all": 75
    },
    "wind": {
-    "speed": 7.4,
+    "speed": 13.6,
     "deg": 190,
-    "gust": 13.2
+    "gust": 21.8
    },
    "visibility": 10000,
    "pop": 0.8,
@@ -454,9 +454,9 @@
     "all": 75
    },
    "wind": {
-    "speed": 7.4,
+    "speed": 10.9,
     "deg": 190,
-    "gust": 13.2
+    "gust": 17.4
    },
    "visibility": 10000,
    "pop": 0.1,
@@ -475,7 +475,7 @@
     "pressure": 1014,
     "sea_level": 1014,
     "grnd_level": 1009,
-    "humidity": 84,
+    "humidity": 78,
     "temp_kf": 0.56
    },
    "weather": [
@@ -490,9 +490,9 @@
     "all": 75
    },
    "wind": {
-    "speed": 7.4,
+    "speed": 7.0,
     "deg": 190,
-    "gust": 13.2
+    "gust": 11.2
    },
    "visibility": 10000,
    "pop": 0.12,
@@ -511,7 +511,7 @@
     "pressure": 1014,
     "sea_level": 1014,
     "grnd_level": 1009,
-    "humidity": 84,
+    "humidity": 81,
     "temp_kf": 0.56
    },
    "weather": [
@@ -526,9 +526,9 @@
     "all": 75
    },
    "wind": {
-    "speed": 7.4,
+    "speed": 8.3,
     "deg": 190,
-    "gust": 13.2
+    "gust": 13.3
    },
    "visibility": 10000,
    "pop": 0.2,
@@ -562,9 +562,9 @@
     "all": 75
    },
    "wind": {
-    "speed": 7.4,
+    "speed": 9.6,
     "deg": 190,
-    "gust": 13.2
+    "gust": 15.4
    },
    "visibility": 10000,
    "pop": 0.24,
@@ -583,7 +583,7 @@
     "pressure": 1014,
     "sea_level": 1014,
     "grnd_level": 1009,
-    "humidity": 84,
+    "humidity": 78,
     "temp_kf": 0.56
    },
    "weather": [
@@ -598,9 +598,9 @@
     "all": 75
    },
    "wind": {
-    "speed": 7.4,
+    "speed": 10.9,
     "deg": 190,
-    "gust": 13.2
+    "gust": 17.4
    },
    "visibility": 10000,
    "pop": 0.15,
@@ -619,7 +619,7 @@
     "pressure": 1014,
     "sea_level": 1014,
     "grnd_level": 1009,
-    "humidity": 84,
+    "humidity": 81,
     "temp_kf": 0.56
    },
    "weather": [
@@ -634,9 +634,9 @@
     "all": 75
    },
    "wind": {
-    "speed": 7.4,
+    "speed": 7.0,
     "deg": 190,
-    "gust": 13.2
+    "gust": 11.2
    },
    "visibility": 10000,
    "pop": 0.08,
@@ -670,9 +670,9 @@
     "all": 75
    },
    "wind": {
-    "speed": 7.4,
+    "speed": 8.3,
     "deg": 190,
-    "gust": 13.2
+    "gust": 13.3
    },
    "visibility": 10000,
    "pop": 0.05,
@@ -691,7 +691,7 @@
     "pressure": 1014,
     "sea_level": 1014,
     "grnd_level": 1009,
-    "humidity": 84,
+    "humidity": 78,
     "temp_kf": 0.56
    },
    "weather": [
@@ -706,9 +706,9 @@
     "all": 75
    },
    "wind": {
-    "speed": 7.4,
+    "speed": 9.6,
     "deg": 190,
-    "gust": 13.2
+    "gust": 15.4
    },
    "visibility": 10000,
    "pop": 0.04,
@@ -727,7 +727,7 @@
     "pressure": 1014,
     "sea_level": 1014,
     "grnd_level": 1009,
-    "humidity": 84,
+    "humidity": 65,
     "temp_kf": 0.56
    },
    "weather": [
@@ -744,7 +744,7 @@
    "wind": {
     "speed": 7.4,
     "deg": 190,
-    "gust": 13.2
+    "gust": 11.8
    },
    "visibility": 10000,
    "pop": 0,
@@ -763,7 +763,7 @@
     "pressure": 1014,
     "sea_level": 1014,
     "grnd_level": 1009,
-    "humidity": 84,
+    "humidity": 68,
     "temp_kf": 0.56
    },
    "weather": [
@@ -778,9 +778,9 @@
     "all": 75
    },
    "wind": {
-    "speed": 7.4,
+    "speed": 3.5,
     "deg": 190,
-    "gust": 13.2
+    "gust": 5.6
    },
    "visibility": 10000,
    "pop": 0,
@@ -799,7 +799,7 @@
     "pressure": 1014,
     "sea_level": 1014,
     "grnd_level": 1009,
-    "humidity": 84,
+    "humidity": 62,
     "temp_kf": 0.56
    },
    "weather": [
@@ -814,9 +814,9 @@
     "all": 75
    },
    "wind": {
-    "speed": 7.4,
+    "speed": 4.8,
     "deg": 190,
-    "gust": 13.2
+    "gust": 7.7
    },
    "visibility": 10000,
    "pop": 0,
@@ -835,7 +835,7 @@
     "pressure": 1014,
     "sea_level": 1014,
     "grnd_level": 1009,
-    "humidity": 84,
+    "humidity": 65,
     "temp_kf": 0.56
    },
    "weather": [
@@ -850,9 +850,9 @@
     "all": 75
    },
    "wind": {
-    "speed": 7.4,
+    "speed": 6.1,
     "deg": 190,
-    "gust": 13.2
+    "gust": 9.8
    },
    "visibility": 10000,
    "pop": 0,
@@ -871,7 +871,7 @@
     "pressure": 1014,
     "sea_level": 1014,
     "grnd_level": 1009,
-    "humidity": 84,
+    "humidity": 68,
     "temp_kf": 0.56
    },
    "weather": [
@@ -888,7 +888,7 @@
    "wind": {
     "speed": 7.4,
     "deg": 190,
-    "gust": 13.2
+    "gust": 11.8
    },
    "visibility": 10000,
    "pop": 0,
@@ -907,7 +907,7 @@
     "pressure": 1014,
     "sea_level": 1014,
     "grnd_level": 1009,
-    "humidity": 84,
+    "humidity": 62,
     "temp_kf": 0.56
    },
    "weather": [
@@ -922,9 +922,9 @@
     "all": 75
    },
    "wind": {
-    "speed": 7.4,
+    "speed": 3.5,
     "deg": 190,
-    "gust": 13.2
+    "gust": 5.6
    },
    "visibility": 10000,
    "pop": 0,
@@ -943,7 +943,7 @@
     "pressure": 1014,
     "sea_level": 1014,
     "grnd_level": 1009,
-    "humidity": 84,
+    "humidity": 65,
     "temp_kf": 0.56
    },
    "weather": [
@@ -958,9 +958,9 @@
     "all": 75
    },
    "wind": {
-    "speed": 7.4,
+    "speed": 4.8,
     "deg": 190,
-    "gust": 13.2
+    "gust": 7.7
    },
    "visibility": 10000,
    "pop": 0,
@@ -979,7 +979,7 @@
     "pressure": 1014,
     "sea_level": 1014,
     "grnd_level": 1009,
-    "humidity": 84,
+    "humidity": 68,
     "temp_kf": 0.56
    },
    "weather": [
@@ -994,9 +994,9 @@
     "all": 75
    },
    "wind": {
-    "speed": 7.4,
+    "speed": 6.1,
     "deg": 190,
-    "gust": 13.2
+    "gust": 9.8
    },
    "visibility": 10000,
    "pop": 0,
@@ -1015,7 +1015,7 @@
     "pressure": 1014,
     "sea_level": 1014,
     "grnd_level": 1009,
-    "humidity": 84,
+    "humidity": 78,
     "temp_kf": 0.56
    },
    "weather": [
@@ -1030,9 +1030,9 @@
     "all": 75
    },
    "wind": {
-    "speed": 7.4,
+    "speed": 10.9,
     "deg": 190,
-    "gust": 13.2
+    "gust": 17.4
    },
    "visibility": 10000,
    "pop": 0,
@@ -1051,7 +1051,7 @@
     "pressure": 1014,
     "sea_level": 1014,
     "grnd_level": 1009,
-    "humidity": 84,
+    "humidity": 81,
     "temp_kf": 0.56
    },
    "weather": [
@@ -1066,9 +1066,9 @@
     "all": 75
    },
    "wind": {
-    "speed": 7.4,
+    "speed": 7.0,
     "deg": 190,
-    "gust": 13.2
+    "gust": 11.2
    },
    "visibility": 10000,
    "pop": 0,
@@ -1102,9 +1102,9 @@
     "all": 75
    },
    "wind": {
-    "speed": 7.4,
+    "speed": 8.3,
     "deg": 190,
-    "gust": 13.2
+    "gust": 13.3
    },
    "visibility": 10000,
    "pop": 0.05,
@@ -1123,7 +1123,7 @@
     "pressure": 1014,
     "sea_level": 1014,
     "grnd_level": 1009,
-    "humidity": 84,
+    "humidity": 78,
     "temp_kf": 0.56
    },
    "weather": [
@@ -1138,9 +1138,9 @@
     "all": 75
    },
    "wind": {
-    "speed": 7.4,
+    "speed": 9.6,
     "deg": 190,
-    "gust": 13.2
+    "gust": 15.4
    },
    "visibility": 10000,
    "pop": 0.1,
@@ -1159,7 +1159,7 @@
     "pressure": 1014,
     "sea_level": 1014,
     "grnd_level": 1009,
-    "humidity": 84,
+    "humidity": 91,
     "temp_kf": 0.56
    },
    "weather": [
@@ -1174,9 +1174,9 @@
     "all": 75
    },
    "wind": {
-    "speed": 7.4,
+    "speed": 14.9,
     "deg": 190,
-    "gust": 13.2
+    "gust": 23.8
    },
    "visibility": 10000,
    "pop": 0.22,
@@ -1198,7 +1198,7 @@
     "pressure": 1014,
     "sea_level": 1014,
     "grnd_level": 1009,
-    "humidity": 84,
+    "humidity": 94,
     "temp_kf": 0.56
    },
    "weather": [
@@ -1213,9 +1213,9 @@
     "all": 75
    },
    "wind": {
-    "speed": 7.4,
+    "speed": 11.0,
     "deg": 190,
-    "gust": 13.2
+    "gust": 17.6
    },
    "visibility": 10000,
    "pop": 0.35,
@@ -1237,7 +1237,7 @@
     "pressure": 1014,
     "sea_level": 1014,
     "grnd_level": 1009,
-    "humidity": 84,
+    "humidity": 88,
     "temp_kf": 0.56
    },
    "weather": [
@@ -1252,9 +1252,9 @@
     "all": 75
    },
    "wind": {
-    "speed": 7.4,
+    "speed": 12.3,
     "deg": 190,
-    "gust": 13.2
+    "gust": 19.7
    },
    "visibility": 10000,
    "pop": 0.41,
@@ -1276,7 +1276,7 @@
     "pressure": 1014,
     "sea_level": 1014,
     "grnd_level": 1009,
-    "humidity": 84,
+    "humidity": 81,
     "temp_kf": 0.56
    },
    "weather": [
@@ -1291,9 +1291,9 @@
     "all": 75
    },
    "wind": {
-    "speed": 7.4,
+    "speed": 9.6,
     "deg": 190,
-    "gust": 13.2
+    "gust": 15.4
    },
    "visibility": 10000,
    "pop": 0.3,
@@ -1312,7 +1312,7 @@
     "pressure": 1014,
     "sea_level": 1014,
     "grnd_level": 1009,
-    "humidity": 84,
+    "humidity": 94,
     "temp_kf": 0.56
    },
    "weather": [
@@ -1327,9 +1327,9 @@
     "all": 75
    },
    "wind": {
-    "speed": 7.4,
+    "speed": 14.9,
     "deg": 190,
-    "gust": 13.2
+    "gust": 23.8
    },
    "visibility": 10000,
    "pop": 0.4,
@@ -1351,7 +1351,7 @@
     "pressure": 1014,
     "sea_level": 1014,
     "grnd_level": 1009,
-    "humidity": 84,
+    "humidity": 88,
     "temp_kf": 0.56
    },
    "weather": [
@@ -1366,9 +1366,9 @@
     "all": 75
    },
    "wind": {
-    "speed": 7.4,
+    "speed": 11.0,
     "deg": 190,
-    "gust": 13.2
+    "gust": 17.6
    },
    "visibility": 10000,
    "pop": 0.5,
@@ -1390,7 +1390,7 @@
     "pressure": 1014,
     "sea_level": 1014,
     "grnd_level": 1009,
-    "humidity": 84,
+    "humidity": 91,
     "temp_kf": 0.56
    },
    "weather": [
@@ -1405,9 +1405,9 @@
     "all": 75
    },
    "wind": {
-    "speed": 7.4,
+    "speed": 12.3,
     "deg": 190,
-    "gust": 13.2
+    "gust": 19.7
    },
    "visibility": 10000,
    "pop": 0.55,
@@ -1429,7 +1429,7 @@
     "pressure": 1014,
     "sea_level": 1014,
     "grnd_level": 1009,
-    "humidity": 84,
+    "humidity": 94,
     "temp_kf": 0.56
    },
    "weather": [
@@ -1444,9 +1444,9 @@
     "all": 75
    },
    "wind": {
-    "speed": 7.4,
+    "speed": 13.6,
     "deg": 190,
-    "gust": 13.2
+    "gust": 21.8
    },
    "visibility": 10000,
    "pop": 0.6,
@@ -1468,7 +1468,7 @@
     "pressure": 1014,
     "sea_level": 1014,
     "grnd_level": 1009,
-    "humidity": 84,
+    "humidity": 88,
     "temp_kf": 0.56
    },
    "weather": [
@@ -1483,9 +1483,9 @@
     "all": 75
    },
    "wind": {
-    "speed": 7.4,
+    "speed": 14.9,
     "deg": 190,
-    "gust": 13.2
+    "gust": 23.8
    },
    "visibility": 10000,
    "pop": 0.52,

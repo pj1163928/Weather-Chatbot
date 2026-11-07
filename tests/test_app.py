@@ -182,11 +182,17 @@ def test_weather_card_shows_in_the_reply_and_stays_in_history(
 # The Seattle forecast sample, as the table shows it (the clock is fixed at
 # 15:00 on Friday, Nov 6 in Seattle by the fake OpenWeather).
 SEATTLE_TABLE = [
-    ["Today, Nov 6 (partial)", "53°F / 47°F", "Light rain", "64%"],
-    ["Tomorrow, Nov 7", "52°F / 44°F", "Moderate rain", "100%"],
-    ["Sunday, Nov 8", "51°F / 44°F", "Broken clouds", "24%"],
-    ["Monday, Nov 9", "51°F / 41°F", "Clear sky", "0%"],
-    ["Tuesday, Nov 10", "50°F / 42°F", "Few clouds", "41%"],
+    ["Today, Nov 6 (partial)", "53°F / 47°F", "Light rain", "64%", "88%", "14 mph"],
+    ["Tomorrow, Nov 7", "52°F / 44°F", "Moderate rain", "100%", "91%", "15 mph"],
+    ["Sunday, Nov 8", "51°F / 44°F", "Broken clouds", "24%", "81%", "11 mph"],
+    ["Monday, Nov 9", "51°F / 41°F", "Clear sky", "0%", "65%", "7 mph"],
+    ["Tuesday, Nov 10", "50°F / 42°F", "Few clouds", "41%", "84%", "15 mph"],
+]
+
+# The day tiles' icons: each day's most common condition, as a daytime icon.
+SEATTLE_ICONS = [
+    f"https://openweathermap.org/img/wn/{code}@2x.png"
+    for code in ["10d", "10d", "04d", "01d", "02d"]
 ]
 
 
@@ -198,8 +204,37 @@ def forecast_table(message) -> list[list[str]]:
         "High / Low",
         "Condition",
         "Chance of rain",
+        "Humidity",
+        "Wind",
     ]
     return table.value.values.tolist()
+
+
+def forecast_tiles_look_right(message) -> None:
+    """Check the forecast card's header and its five day tiles."""
+    texts = [t.value for t in message.text]
+    # The location, then each tile's condition, all as plain text.
+    assert texts == [
+        "Seattle, Washington, US",
+        "Light rain",
+        "Moderate rain",
+        "Broken clouds",
+        "Clear sky",
+        "Few clouds",
+    ]
+    icons = [url for image in message.image for url in image.value]
+    assert icons == SEATTLE_ICONS
+    markdown = [m.value for m in message.markdown]
+    for name, temperatures, rain, wind in [
+        ("Today", "53°F / 47°F", "64%", "14 mph"),
+        ("Tomorrow", "52°F / 44°F", "100%", "15 mph"),
+        ("Tuesday", "50°F / 42°F", "41%", "15 mph"),
+    ]:
+        assert f"**{name}**" in markdown
+        assert f"**{temperatures}**" in markdown
+        assert f":material/water_drop: {rain}  \n:material/air: {wind}" in markdown
+    captions = [c.value for c in message.caption]
+    assert captions[:3] == ["5-day forecast", "Nov 6 · partial", "Nov 7"]
 
 
 def test_forecast_table_shows_in_the_reply_and_stays_in_history(
@@ -219,19 +254,52 @@ def test_forecast_table_shows_in_the_reply_and_stays_in_history(
     assert not at.exception
     first_reply = assistant_messages(at)[0]
     assert first_reply.markdown[0].value.startswith("Yes, bring an umbrella")
-    assert [t.value for t in first_reply.text] == [
-        "5-day forecast: Seattle, Washington, US"
-    ]
+    forecast_tiles_look_right(first_reply)
     assert forecast_table(first_reply) == SEATTLE_TABLE
     assert len(first_reply.metric) == 0  # no current-weather tiles
 
-    # A new message re-renders the page; the table must still be there.
+    # A new message re-renders the page; the card must still be there.
     at.chat_input[0].set_value("Thanks!").run()
 
     assert not at.exception
     replies = assistant_messages(at)
+    forecast_tiles_look_right(replies[0])
     assert forecast_table(replies[0]) == SEATTLE_TABLE
     assert len(replies[1].dataframe) == 0
+
+
+def test_a_forecast_card_saved_before_humidity_and_wind_still_renders(
+    use_env_file, monkeypatch
+):
+    # A card stored in an open session before this change has no humidity,
+    # wind or icon. After a code reload it must still draw, with dashes.
+    use_env_file(BOTH_KEYS)
+    old_day = {
+        "date": "2026-11-06",
+        "label": "Today",
+        "high": 53.0,
+        "low": 47.0,
+        "condition": "light rain",
+        "chance_of_rain": 64,
+        "partial": False,
+    }
+    old_card = {
+        "kind": "forecast",
+        "location": "Seattle, Washington, US",
+        "units": "imperial",
+        "days": [old_day] * 5,
+    }
+    at = AppTest.from_file(APP)
+    at.session_state["messages"] = [
+        {"role": "user", "content": "Forecast for Seattle?"},
+        {"role": "assistant", "content": "Here it is.", "cards": [old_card]},
+    ]
+    at.run()
+
+    assert not at.exception
+    (row, *_) = forecast_table(assistant_messages(at)[0])
+    assert row[-2:] == ["–", "–"]
+    assert len(assistant_messages(at)[0].image) == 0
 
 
 def test_a_failing_xai_call_shows_a_friendly_message(use_env_file, monkeypatch):

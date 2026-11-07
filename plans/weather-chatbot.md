@@ -175,7 +175,7 @@ Cache tool results by city and units for 10 minutes. The cache is a small time-l
 
 - [x] Switching the toggle changes units in new lookups, and labels match (°F/mph or °C/m/s).
 - [x] Asking the model to "use Celsius" doesn't change the units; only the toggle does.
-- [ ] "What about tomorrow?" after a Chicago question answers for Chicago.
+- [x] "What about tomorrow?" after a Chicago question answers for Chicago.
 - [x] Only the last 2 exchanges are sent as history.
 - [x] A repeated lookup within 10 minutes doesn't call OpenWeather again, and a units change creates a separate cache entry.
 - [x] pytest covers the history-trimming logic.

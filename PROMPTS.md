@@ -5,6 +5,28 @@ and the decisions made along the way. Newest entries first.
 
 ---
 
+## 2026-11-06 — Weather chatbot: Forecast card with day tiles and more table details
+
+### Prompts
+
+1. "Ok everything seems to be working, one thing I would like to improve on is the appearance of the 5 day forecast. If we could include more information in the table such as humidity wind and rain chance. Then can we add a card that actually shows us and informative look on the weather as a normal weather app would do this would include the name of the city or location where you are looking up the 5-day forecast the condition as an icon and stated the high and low temps rain change and wind speed."
+
+### Summary
+
+- **Outcome:** The forecast now draws as a weather-app style card: a header with the location, then five equal-height day tiles (day name, date, condition icon, condition, high/low, chance of rain, wind), then the table with two new columns, Humidity and Wind (chance of rain was already there). 146 tests pass (5 new); `ruff check` and `ruff format` are clean. A scratch page rendered the card from the saved Seattle sample on the real Streamlit server with no console warnings; no Grok or OpenWeather calls were made. The user confirmed the Phase 4 manual tests passed, so the Chicago follow-up criterion was ticked.
+- **Changes:**
+  - `weather_chatbot/weather.py` — each forecast day gains `icon`, `humidity` and `wind_speed`, and the forecast result gains `wind_speed_unit`; the forecast tool's docstring (which the model sees) lists the new fields.
+  - `app.py` — `render_forecast()` draws the header, the tiles and the table; new helpers `render_forecast_day()`, `short_date()`, `high_low()`, `humidity_text()` and `wind_text()`; `forecast_rows()` adds Humidity and Wind.
+  - `tests/test_forecast.py` — `entry()` takes humidity, wind and icon; summary tests include the new fields; new tests for average humidity, highest wind and the day icon rule. `tests/test_app.py` — checks the header, tiles, icons and six-column table, and that an older card without the new fields still draws.
+  - `tests/fixtures/openweather/forecast_seattle.json` — humidity and wind now vary by condition (temperatures, conditions and rain are unchanged).
+  - `docs/ARCHITECTURE.md`, `docs/SECURITY.md`, `docs/TESTING.md` — new fields, render functions, the plain-text rule for tiles, test coverage. `plans/weather-chatbot.md` — last Phase 4 criterion ticked.
+- **TDD:** Skipped. This was a display change plus simple per-day aggregates outside a plan phase, covered by ordinary tests.
+- **Decisions:** A day's humidity is the average of its entries and its wind is the highest, matching how high/low already work. The tile icon is the icon of the day's most common condition, shown as its daytime version, and must match `ICON_PATTERN`. The tiles show the app's own text (day names, numbers) with `st.markdown` and OpenWeather's condition with `st.text`. The table stays below the tiles for the full detail. A card saved before this change shows "–" for humidity and wind instead of failing after a hot reload. The made-up Seattle sample had the same humidity and wind in every entry, so those two fields were varied to make the tests meaningful.
+- **Deviations:** None.
+- **Sideways:** Two Seattle expectation lines went over ruff's line length and were split into two assertions. The preview script's console output failed on `°` until it was run with `-X utf8`.
+
+---
+
 ## 2026-11-06 — Weather chatbot: Phase 4/8, Units toggle, follow-ups, caching
 
 ### Prompts
