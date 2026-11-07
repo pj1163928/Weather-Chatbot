@@ -1,6 +1,6 @@
 ---
 name: implement
-description: Build one phase of a feature plan end to end — read the PRD and plan, decide whether to delegate to the tdd skill, implement and test the phase, write a manual browser test guide, log the session in PROMPTS.md, and offer to commit and push. Use when the user runs /implement.
+description: Build one phase of a feature plan end to end — read the PRD and plan, decide whether to delegate to the tdd skill, implement and test the phase, write a manual test guide, log the session in PROMPTS.md, and offer to commit and push. Works in any language or framework. Use when the user runs /implement.
 argument-hint: "<feature> [phase <N>] [tdd|no-tdd] [notes]"
 disable-model-invocation: true
 ---
@@ -9,6 +9,10 @@ disable-model-invocation: true
 
 Build one phase of `plans/<feature>.md` against `prd/<feature>.md`, from
 reading the plan through to the commit.
+
+This skill is the same for every language and framework. Everything
+project-specific comes from the project itself: its `CLAUDE.md`, its docs, its
+manifests and its existing code. Never assume a stack the project doesn't use.
 
 ## 1. Find the phase
 
@@ -28,23 +32,30 @@ reading the plan through to the commit.
 
 ## 2. Gather context
 
-- Read the plan's architectural decisions, the phase itself, and the PRD
-  sections behind the phase's user stories. Where the plan says "per the
-  PRD", the PRD's wording is authoritative.
-- Read [docs/TESTING.md](../../../docs/TESTING.md), and every
-  "Read before…" index in `CLAUDE.md` that covers an area this phase
-  touches. Then open only the topic files those indexes point to for this
-  phase's areas, not whole doc folders.
-- When the phase is built, update the docs as `CLAUDE.md`'s "Keeping the
-  docs organized" says: the area's topic file, plus any new URL, shared
-  function or test file in its listing.
-- Read the code that earlier phases built, and the existing pattern closest
-  to the one this phase needs. The plan often names that pattern, such as the
-  wishlist's template tag.
+- **The plan and PRD.** Read the plan's architectural decisions, the phase
+  itself, and the PRD sections behind the phase's user stories. Where the plan
+  says "per the PRD", the PRD's wording is authoritative.
+- **The project docs.** Read `CLAUDE.md` if it exists. If it has a "Read
+  before…" index, open only the topic files listed for areas this phase
+  touches, not whole doc folders. Always read the project's testing doc if one
+  exists (often `docs/TESTING.md`).
+- **The project's commands.** Find the exact commands for install, run,
+  test, lint, format and type-check. Look in this order: `CLAUDE.md`, the
+  docs, the README, then the manifests and task runners (for example
+  `pyproject.toml`, `package.json` scripts, `Makefile`, `Cargo.toml`,
+  `go.mod`, `*.csproj`/`*.sln`, `Gemfile`, `composer.json`) and the CI
+  workflows. Use those commands exactly. Never invent one. If the project has
+  no tool for a check (no linter, say), skip it and say so in the brief.
+- **The code.** Read the code that earlier phases built, and the existing
+  pattern closest to the one this phase needs. The plan often names that
+  pattern.
+- **Updating the docs.** When the phase is built, update the docs as
+  `CLAUDE.md`'s "Keeping the docs organized" section says. If there is no
+  such section, update any doc the phase made inaccurate.
 
-Fill any gaps from the PRD first, then from the codebase's existing patterns.
-Ask only when the answer is genuinely the user's call and it changes what gets
-built.
+Fill any gaps from the PRD first, then from the codebase's existing patterns,
+then from the language's or framework's idiomatic conventions. Ask only when
+the answer is genuinely the user's call and it changes what gets built.
 
 ## 3. Decide on TDD
 
@@ -53,14 +64,17 @@ wrong implementation would be costly and easy to miss by eye:
 
 - permissions, privacy, or who can see or change what
 - eligibility and business rules
-- state transitions, database constraints, or invariants
-- calculations, aggregations, or queries with edge cases
-- security: sign-in, tokens, cooldowns, the audit log
-- a public function in one of the four deep modules
+- state transitions, data constraints, or invariants
+- calculations, aggregations, parsing, or queries with edge cases
+- security: authentication, tokens, secrets, input validation, rate limits,
+  audit logging
+- a public function in one of the project's core modules (the ones
+  `CLAUDE.md` or the plan names as central)
 
-Skip TDD when the phase is only templates, styling, copy, seed data,
-configuration or documentation, or when it wires up something that follows
-an existing, tested pattern without adding a new rule. If the user passed
+Skip TDD when the phase is only UI layout or styling, copy, seed or fixture
+data, configuration or documentation, or when it wires up something that
+follows an existing, tested pattern without adding a new rule. If the plan
+gives a TDD recommendation for the phase, start from it. If the user passed
 `tdd` or `no-tdd`, that overrides this decision.
 
 ## 4. Brief, then stop once
@@ -68,7 +82,9 @@ an existing, tested pattern without adding a new rule. If the user passed
 Present all of this in one message:
 
 - the phase title, plus a few lines on what will be built
-- the areas and files expected to change, including any migrations
+- the areas and files expected to change, including any schema migrations or
+  new dependencies
+- the commands you will use to test and check the phase (from step 2)
 - the decisions you made where the plan left a gap
 - the TDD decision: yes or no, with one sentence on why
 
@@ -82,58 +98,78 @@ and any question that is genuinely the user's call.
 
 ## 5. Build
 
-- Follow the conventions in `CLAUDE.md`. Logic goes in models and managers,
-  cross-model workflows get a service module, views are thin and
-  class-based, and every URL is named and namespaced. Every public function
-  in a deep module gets a docstring and type hints.
-- With TDD, follow the `tdd` skill's rules for the approved behaviors. Every
-  other acceptance criterion still gets ordinary tests.
-- If the models change, make migrations. If the phase extends the seed, run
-  `seed` twice to confirm it is idempotent.
-- Stay inside the phase. If you notice something a later phase needs, note
-  it; do not build it.
-- Before finishing, `uv run pytest` must be green, and `uv run ruff check .`
-  and `uv run ruff format .` must be clean. Never finish red. If something
-  will not pass, report it with its output.
-- In the plan, tick each acceptance criterion (`- [x]`) once it is built and
+- **Follow the project's conventions.** Use the ones in `CLAUDE.md` and the
+  topic docs, and match the surrounding code's structure, naming, error
+  handling and test style. Public interfaces get the kind of documentation
+  the project already uses (docstrings, JSDoc, XML doc comments and so on).
+  Use type annotations where the language and project use them.
+- **With TDD**, follow the `tdd` skill's rules for the approved behaviors.
+  Every other acceptance criterion still gets ordinary tests, written the way
+  the existing tests are.
+- **Dependencies.** Add new ones with the project's package manager, pinned
+  the way the project pins its others.
+- **Schema and data.** If the data model changes, create migrations with the
+  project's migration tool. If the phase changes seed or fixture data, run the
+  seed twice to confirm it is idempotent.
+- **Scope.** Stay inside the phase. If you notice something a later phase
+  needs, note it; do not build it.
+- **Before finishing**, the full test suite must pass, and the lint, format
+  and type-check commands from step 2 must be clean. Never finish red. If
+  something will not pass, report it with its output.
+- **The plan.** Tick each acceptance criterion (`- [x]`) once it is built and
   either covered by a test or checked by hand. Leave any unmet criterion
   unticked and explain why.
 
-## 6. Manual browser test guide
+## 6. Manual test guide
 
-Write it for the user to follow in a browser, and give it in the reply, not
-in a file. Include:
+Write a guide for the user to follow against the running software, and give
+it in the reply, not in a file. Shape it to what the phase changed:
 
-- **Setup**: the commands to run, in order: `migrate` if there are new
-  migrations; `seed` if the seed changed (warn that it resets the database);
-  then `uv run python manage.py tailwind runserver`, with the URL to open. If
-  Tailwind fails with WinError 4551, Windows Smart App Control is blocking
-  its binary; the code is not the cause.
-- **Accounts**: which seeded users to sign in as, with credentials taken from
-  the `seed` command. Never guess them.
-- **Walkthroughs**: numbered steps for each scenario: where to go, what to
-  click or type, and what should happen. Cover:
+- **Web or desktop UI:** where to go, what to click or type, and what
+  should appear.
+- **CLI:** the exact commands to run and the expected output.
+- **API or service:** example requests (for example `curl`) with the
+  expected status codes and response bodies.
+- **Library with no runnable interface:** a short script or REPL session
+  that exercises the new behavior.
+
+If the phase changes nothing a person can observe beyond the automated tests,
+say so in one sentence and skip the guide.
+
+Include:
+
+- **Setup:** the commands to run, in order, taken from step 2. Cover
+  installing any new dependencies, applying new migrations, running the seed
+  if it changed (warn if it resets data), then starting the app, with the URL
+  or entry point.
+- **Accounts and data:** if the app has sign-in or roles, say which users to
+  use, with credentials taken from the seed or fixture data. Never guess
+  them.
+- **Walkthroughs:** numbered steps for each scenario. Cover:
   - the happy path
-  - each role that sees something different (visitor, customer, staff,
-    superuser)
-  - validation errors
+  - each role or user type that sees something different
+  - validation errors and invalid input
   - the edge cases named in the acceptance criteria
-- **What to look for**: be specific:
-  - exact wording
-  - which part of the page updates. An HTMX swap should not reload the
-    page; the Network tab shows the partial.
+- **What to look for:** be specific:
+  - exact wording or output
+  - what changes, and what should *not* (for example, a partial page update
+    should not reload the whole page)
   - counts and states after each action
-  - light and dark themes, and phone width if the layout changed
-- **Signs of a problem**: the symptoms that would mean something is wrong.
+  - for UI changes, any themes or narrow screen widths the project supports
+- **Signs of a problem:** the symptoms that would mean something is wrong.
+- **Known environment gotchas:** any listed in `CLAUDE.md` or the docs that
+  could look like a bug.
 
-Leave out anything a browser cannot show.
+Leave out anything the person cannot observe.
 
 ## 7. Log the session in PROMPTS.md
 
 When the user runs `/implement`, that is their instruction to log the
-session. Add the new entry at the top: right after the `---` that ends the
-header, above every earlier entry. Never edit an older entry. Use the file's
-established shape, with a **Changes** list added:
+session. If `PROMPTS.md` doesn't exist, create it with a short header (a
+title, a line saying it records each build session, newest first, and a
+closing `---`). Add the new entry at the top: right after the `---` that ends
+the header, above every earlier entry. Never edit an older entry. Use this
+shape:
 
     ## YYYY-MM-DD — <Feature>: Phase N/M, <phase title>
 
@@ -144,7 +180,7 @@ established shape, with a **Changes** list added:
 
     ### Summary
 
-    - **Outcome:** what was built; the test count; ruff status
+    - **Outcome:** what was built; the test count; lint/format/type-check status
     - **Changes:**
       - `path/to/file` — what changed and why
     - **TDD:** the behaviors driven by tests, or why the phase skipped TDD
@@ -169,8 +205,14 @@ commit".
 
 - Stage files one path at a time; never use `git add -A` or `git add .`.
   - Always stage: the files this phase changed, the plan, and `PROMPTS.md`.
-  - Stage only if the user says to: files that were already modified before
-    the phase began (from step 1), `db.sqlite3`, and the PRD if it is
-    untracked. List them in the question.
+  - Stage only if the user says to:
+    - files that were already modified before the phase began (from step 1)
+    - local databases, build output or other generated files that are not
+      gitignored
+    - the PRD, if it is untracked
+
+    List them in the question.
+- Never stage secrets (`.env` files, keys, credentials), even if they are
+  not gitignored. Warn the user instead.
 - Commit on the current branch.
 - If the push fails, report the error. Never force-push.
