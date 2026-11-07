@@ -5,6 +5,27 @@ and the decisions made along the way. Newest entries first.
 
 ---
 
+## 2026-11-06 — Weather chatbot: Forecast tiles fit and smoother scrolling
+
+### Prompts
+
+1. "Okay another thing is the text seems to be cut off on wednesday and when I scroll up it hitches a bit can this be fixed"
+
+### Summary
+
+- **Outcome:** Day tiles no longer clip: they use short names ("Today", "Sat", "Wed") and temperatures without the unit ("53° / 47°"), and the card's header caption names the unit ("5-day forecast · temperatures in °F"). The forecast table is now a static `st.table` instead of an `st.dataframe` grid, which caught the mouse wheel and made the chat stutter while scrolling. Because `st.table` renders Markdown, OpenWeather condition text is now limited to plain words by a new `plain_condition()` check. 168 tests pass (22 new); `ruff check` and `ruff format` are clean. A scratch page rendered the card from the saved Seattle sample on the real Streamlit server with no console warnings. The scrolling itself could only be checked in a browser, by the user.
+- **Changes:**
+  - `weather_chatbot/weather.py` — `ALLOWED_CONDITION_PUNCTUATION`, `MAX_CONDITION_LENGTH`, `UNKNOWN_CONDITION` and `plain_condition()`; current-weather and forecast conditions pass through it.
+  - `app.py` — `tile_name()`; tiles show unit-free temperatures; the header caption names the unit; the table is `st.table(..., border="horizontal")` and its condition cell passes `plain_condition()` again.
+  - `tests/test_weather.py` — 21 `plain_condition()` cases and a hostile current-weather condition. `tests/test_forecast.py` — a hostile forecast condition. `tests/test_app.py` — the table is an `st.table` (no dataframe), short tile names including "Wed", unit-free tile temperatures, and the header caption.
+  - `docs/ARCHITECTURE.md`, `docs/SECURITY.md`, `docs/TESTING.md` — the table change and why, the tile-width gotcha, the plain-condition rule, and test coverage.
+- **TDD:** Skipped. This was a display fix plus a small allowlist check, covered by ordinary tests.
+- **Decisions:** The scroll stutter was put down to `st.dataframe`'s canvas grid catching wheel events, since every forecast in the history added one. `st.table` was chosen over hiding the table in an expander, so the details stay visible. Instead of escaping Markdown, an allowlist keeps conditions to letters, spaces, `-`, `/` and `,`, starting with a letter and at most 60 characters. None of Markdown's link, emphasis, emoji, icon or math syntax can be built from those. The check runs at the source (the weather module), so the model also gets clean text, and once more in the table cell. "Tomorrow" shows as its weekday ("Sat") in tiles; the table keeps the full labels.
+- **Deviations:** None.
+- **Sideways:** A Python heredoc turned the `\n` in a newline test case into a real line break, splitting the string; it was fixed by hand. The Phase 4 follow-up test still counted forecast tables as dataframes and was switched to tables.
+
+---
+
 ## 2026-11-06 — Weather chatbot: Forecast card with day tiles and more table details
 
 ### Prompts

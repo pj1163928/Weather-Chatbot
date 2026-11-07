@@ -271,6 +271,17 @@ def test_the_day_icon_is_the_daytime_icon_of_the_most_common_condition(
     assert today["icon"] == expected_icon
 
 
+def test_a_hostile_forecast_condition_is_replaced():
+    today = seattle_today(
+        entry(utc("2026-11-07 00:00"), condition="**rain** :material/home:"),
+        entry(utc("2026-11-07 03:00"), condition="**rain** :material/home:"),
+        entry(utc("2026-11-07 06:00"), condition="light rain"),
+    )
+
+    assert today["condition"] == weather.UNKNOWN_CONDITION
+    assert today["icon"] == "01d"  # the icon is still checked on its own
+
+
 # --- The five-day rule: never fewer, never invented ----------------------------
 
 

@@ -56,6 +56,18 @@ UNIT_LABELS: dict[str, tuple[str, str]] = {
 # OpenWeather icon codes look like "10d" or "01n".
 ICON_PATTERN: re.Pattern[str] = re.compile(r"\d{2}[dn]")
 
+# A condition description ("light rain", "sand/dust whirls") may use only
+# letters and these characters, and must start with a letter. No Markdown,
+# link or emoji syntax can be built from them, so the UI can show it safely
+# even where Markdown is rendered.
+ALLOWED_CONDITION_PUNCTUATION: frozenset[str] = frozenset(" -/,")
+
+# The longest condition description kept.
+MAX_CONDITION_LENGTH: int = 60
+
+# Shown instead of a description that isn't plain words.
+UNKNOWN_CONDITION: str = "unknown"
+
 GEOCODING_URL: str = "https://api.openweathermap.org/geo/1.0/direct"
 CURRENT_WEATHER_URL: str = "https://api.openweathermap.org/data/2.5/weather"
 FORECAST_URL: str = "https://api.openweathermap.org/data/2.5/forecast"
@@ -118,6 +130,22 @@ def is_valid_city(city: str) -> bool:
     return all(char.isalpha() or char in ALLOWED_CITY_PUNCTUATION for char in name)
 
 
+def plain_condition(description: Any) -> str:
+    """Return an OpenWeather condition description if it is plain words.
+
+    Plain words start with a letter, are at most ``MAX_CONDITION_LENGTH``
+    characters, and use only letters, spaces, hyphens, slashes and commas.
+    Anything else becomes ``UNKNOWN_CONDITION``, so the text can't carry
+    Markdown into the page or instructions into the model.
+    """
+    text = str(description).strip()
+    if not text or not text[0].isalpha() or len(text) > MAX_CONDITION_LENGTH:
+        return UNKNOWN_CONDITION
+    if all(char.isalpha() or char in ALLOWED_CONDITION_PUNCTUATION for char in text):
+        return text
+    return UNKNOWN_CONDITION
+
+
 def fetch_json(url: str, params: dict[str, Any]) -> Any:
     """GET ``url`` with ``params`` and return the decoded JSON.
 
@@ -172,7 +200,7 @@ def parse_current_weather(
         "feels_like": data["main"]["feels_like"],
         "humidity": data["main"]["humidity"],
         "wind_speed": data["wind"]["speed"],
-        "condition": condition["description"],
+        "condition": plain_condition(condition["description"]),
         # Only a well-formed code is kept, because the UI builds a URL from it.
         "icon": icon if ICON_PATTERN.fullmatch(icon) else None,
         "units": units,
@@ -246,7 +274,7 @@ def summarize_day(
 
     - ``high`` is the largest ``temp_max`` and ``low`` the smallest ``temp_min``.
     - ``condition`` is the most common description. A tie goes to the one that
-      appears first in the day.
+      appears first in the day. It is checked with ``plain_condition``.
     - ``icon`` is the icon of the first entry with that condition, as its
       daytime version ("10n" becomes "10d"), the way weather apps show a day.
       It is None if OpenWeather's code isn't well formed.
@@ -272,7 +300,7 @@ def summarize_day(
         "label": day_label(day, today),
         "high": max(item["main"]["temp_max"] for item in entries),
         "low": min(item["main"]["temp_min"] for item in entries),
-        "condition": condition,
+        "condition": plain_condition(condition),
         # Only a well-formed code is kept, because the UI builds a URL from it.
         "icon": icon[:2] + "d" if ICON_PATTERN.fullmatch(icon) else None,
         "chance_of_rain": round(max(item.get("pop", 0) for item in entries) * 100),

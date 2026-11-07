@@ -197,8 +197,12 @@ SEATTLE_ICONS = [
 
 
 def forecast_table(message) -> list[list[str]]:
-    """The rows of the one forecast table inside a chat message."""
-    (table,) = message.dataframe
+    """The rows of the one forecast table inside a chat message.
+
+    It is a static ``st.table``; an ``st.dataframe`` grid made scrolling stutter.
+    """
+    assert len(message.dataframe) == 0
+    (table,) = message.table
     assert list(table.value.columns) == [
         "Day",
         "High / Low",
@@ -225,16 +229,23 @@ def forecast_tiles_look_right(message) -> None:
     icons = [url for image in message.image for url in image.value]
     assert icons == SEATTLE_ICONS
     markdown = [m.value for m in message.markdown]
+    # Short names and unit-free temperatures, so nothing is cut off in a tile.
     for name, temperatures, rain, wind in [
-        ("Today", "53°F / 47°F", "64%", "14 mph"),
-        ("Tomorrow", "52°F / 44°F", "100%", "15 mph"),
-        ("Tuesday", "50°F / 42°F", "41%", "15 mph"),
+        ("Today", "53° / 47°", "64%", "14 mph"),
+        ("Sat", "52° / 44°", "100%", "15 mph"),
+        ("Sun", "51° / 44°", "24%", "11 mph"),
+        ("Mon", "51° / 41°", "0%", "7 mph"),
+        ("Tue", "50° / 42°", "41%", "15 mph"),
     ]:
         assert f"**{name}**" in markdown
         assert f"**{temperatures}**" in markdown
         assert f":material/water_drop: {rain}  \n:material/air: {wind}" in markdown
     captions = [c.value for c in message.caption]
-    assert captions[:3] == ["5-day forecast", "Nov 6 · partial", "Nov 7"]
+    assert captions[:3] == [
+        "5-day forecast · temperatures in °F",
+        "Nov 6 · partial",
+        "Nov 7",
+    ]
 
 
 def test_forecast_table_shows_in_the_reply_and_stays_in_history(
@@ -265,7 +276,7 @@ def test_forecast_table_shows_in_the_reply_and_stays_in_history(
     replies = assistant_messages(at)
     forecast_tiles_look_right(replies[0])
     assert forecast_table(replies[0]) == SEATTLE_TABLE
-    assert len(replies[1].dataframe) == 0
+    assert len(replies[1].table) == 0
 
 
 def test_a_forecast_card_saved_before_humidity_and_wind_still_renders(
@@ -274,20 +285,29 @@ def test_a_forecast_card_saved_before_humidity_and_wind_still_renders(
     # A card stored in an open session before this change has no humidity,
     # wind or icon. After a code reload it must still draw, with dashes.
     use_env_file(BOTH_KEYS)
-    old_day = {
-        "date": "2026-11-06",
-        "label": "Today",
-        "high": 53.0,
-        "low": 47.0,
-        "condition": "light rain",
-        "chance_of_rain": 64,
-        "partial": False,
-    }
+    old_days = [
+        {
+            "date": f"2026-11-{day:02d}",
+            "label": label,
+            "high": 53.0,
+            "low": 47.0,
+            "condition": "light rain",
+            "chance_of_rain": 64,
+            "partial": False,
+        }
+        for day, label in [
+            (9, "Today"),
+            (10, "Tomorrow"),
+            (11, "Wednesday"),
+            (12, "Thursday"),
+            (13, "Friday"),
+        ]
+    ]
     old_card = {
         "kind": "forecast",
         "location": "Seattle, Washington, US",
         "units": "imperial",
-        "days": [old_day] * 5,
+        "days": old_days,
     }
     at = AppTest.from_file(APP)
     at.session_state["messages"] = [
@@ -297,9 +317,13 @@ def test_a_forecast_card_saved_before_humidity_and_wind_still_renders(
     at.run()
 
     assert not at.exception
-    (row, *_) = forecast_table(assistant_messages(at)[0])
+    reply = assistant_messages(at)[0]
+    (row, *_) = forecast_table(reply)
     assert row[-2:] == ["–", "–"]
-    assert len(assistant_messages(at)[0].image) == 0
+    assert len(reply.image) == 0
+    # Tiles use short weekday names, so "Wednesday" can't be cut off.
+    tile_names = [m.value for m in reply.markdown if m.value.startswith("**")][::2]
+    assert tile_names == ["**Today**", "**Tue**", "**Wed**", "**Thu**", "**Fri**"]
 
 
 def test_a_failing_xai_call_shows_a_friendly_message(use_env_file, monkeypatch):
@@ -393,4 +417,4 @@ def test_a_follow_up_sends_the_earlier_exchange_as_text_only(
     # The earlier card's data stayed out of the request.
     assert "Washington" not in " ".join(str(m.content) for m in follow_up_request)
     assert fake_openweather.geocoded == ["Seattle", "Seattle"]
-    assert len(assistant_messages(at)[1].dataframe) == 1
+    assert len(assistant_messages(at)[1].table) == 1

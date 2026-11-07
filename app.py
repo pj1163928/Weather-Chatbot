@@ -11,7 +11,12 @@ import streamlit as st
 
 from weather_chatbot.agent import create_model, run_agent
 from weather_chatbot.config import check_keys, load_env, setup_message
-from weather_chatbot.weather import DEFAULT_UNITS, SUPPORTED_UNITS, UNIT_LABELS
+from weather_chatbot.weather import (
+    DEFAULT_UNITS,
+    SUPPORTED_UNITS,
+    UNIT_LABELS,
+    plain_condition,
+)
 
 # Shown when the xAI call fails. Phase 7 replaces this with full error mapping
 # and redacted logging.
@@ -108,6 +113,13 @@ def high_low(day: dict[str, Any], temperature_unit: str) -> str:
     )
 
 
+def tile_name(day: dict[str, Any]) -> str:
+    """A day tile's short name: "Today", or the weekday shortened ("Sat")."""
+    if day["label"] == "Today":
+        return "Today"
+    return f"{date.fromisoformat(day['date']):%a}"
+
+
 def humidity_text(day: dict[str, Any]) -> str:
     """A forecast day's average humidity, like "84%" ("–" if not known)."""
     humidity = day.get("humidity")
@@ -137,7 +149,8 @@ def forecast_rows(card: dict[str, Any]) -> list[dict[str, str]]:
             {
                 "Day": name,
                 "High / Low": high_low(day, temperature_unit),
-                "Condition": day["condition"].capitalize(),
+                # The only OpenWeather text in the table, which renders Markdown.
+                "Condition": plain_condition(day["condition"]).capitalize(),
                 "Chance of rain": f"{day['chance_of_rain']}%",
                 "Humidity": humidity_text(day),
                 "Wind": wind_text(day, speed_unit),
@@ -149,18 +162,22 @@ def forecast_rows(card: dict[str, Any]) -> list[dict[str, str]]:
 def render_forecast_day(day: dict[str, Any], units: str) -> None:
     """Draw one day's tile: name, date, icon, condition, high/low, rain and wind.
 
-    The day name, date and numbers are the app's own text. The condition comes
-    from OpenWeather, so it is shown with ``st.text`` (plain text).
+    Tiles are narrow, so the name is short ("Today", "Sat", "Wed") and the
+    temperatures leave out the unit (the card's header says it). The day name,
+    date and numbers are the app's own text. The condition comes from
+    OpenWeather, so it is shown with ``st.text`` (plain text).
     """
-    temperature_unit, speed_unit = UNIT_LABELS[units]
-    st.markdown(f"**{day['label']}**", text_alignment="center")
+    _, speed_unit = UNIT_LABELS[units]
+    st.markdown(f"**{tile_name(day)}**", text_alignment="center")
     when = short_date(day) + (" · partial" if day["partial"] else "")
     st.caption(when, text_alignment="center")
     if day.get("icon"):
         with st.container(horizontal_alignment="center"):
             st.image(ICON_URL.format(code=day["icon"]), width=56, alt=day["condition"])
     st.text(day["condition"].capitalize(), text_alignment="center", width="stretch")
-    st.markdown(f"**{high_low(day, temperature_unit)}**", text_alignment="center")
+    st.markdown(
+        f"**{round(day['high'])}° / {round(day['low'])}°**", text_alignment="center"
+    )
     st.markdown(
         f":material/water_drop: {day['chance_of_rain']}%  \n"
         f":material/air: {wind_text(day, speed_unit)}",
@@ -172,23 +189,28 @@ def render_forecast(card: dict[str, Any]) -> None:
     """Draw the 5-day forecast from a raw tool result, never from model text.
 
     A header with the location, a row of five day tiles like a weather app,
-    then a table with every detail. ``st.dataframe`` shows cells as plain text
-    (unlike ``st.table``, which renders Markdown), so OpenWeather's text can't
-    add formatting or links.
+    then a table with every detail.
+
+    The table is a static ``st.table``, not an ``st.dataframe``: a dataframe is
+    an interactive grid that catches the mouse wheel, so a chat full of them
+    stutters while scrolling. ``st.table`` renders Markdown in its cells, so
+    every cell is the app's own text except the condition, which passes
+    ``plain_condition`` (plain words only) first.
     """
+    temperature_unit, _ = UNIT_LABELS[card["units"]]
     with st.container(border=True):
         with st.container(horizontal=True, vertical_alignment="center", gap="small"):
             st.markdown(":material/location_on:")
             st.text(card["location"])
-        st.caption("5-day forecast")
+        st.caption(f"5-day forecast · temperatures in {temperature_unit}")
         days = card["days"]
         for column, day in zip(st.columns(len(days), border=True), days, strict=True):
             with column:
                 render_forecast_day(day, card["units"])
-        st.dataframe(
+        st.table(
             forecast_rows(card),
             hide_index=True,
-            height="content",
+            border="horizontal",
             alt=f"5-day forecast for {card['location']}",
         )
         if any(day["partial"] for day in card["days"]):
