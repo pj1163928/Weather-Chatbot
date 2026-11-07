@@ -11,7 +11,7 @@ import streamlit as st
 
 from weather_chatbot.agent import create_model, run_agent
 from weather_chatbot.config import check_keys, load_env, setup_message
-from weather_chatbot.weather import DEFAULT_UNITS
+from weather_chatbot.weather import DEFAULT_UNITS, SUPPORTED_UNITS, UNIT_LABELS
 
 # Shown when the xAI call fails. Phase 7 replaces this with full error mapping
 # and redacted logging.
@@ -21,11 +21,8 @@ UNAVAILABLE_MESSAGE = (
     "correct."
 )
 
-# Labels for each units setting: (temperature, wind speed).
-UNIT_LABELS: dict[str, tuple[str, str]] = {
-    "imperial": ("°F", "mph"),
-    "metric": ("°C", "m/s"),
-}
+# The session-state key of the sidebar °F/°C toggle.
+UNITS_KEY = "units"
 
 # OpenWeather's icon images. The code is checked by the weather module first.
 ICON_URL = "https://openweathermap.org/img/wn/{code}@2x.png"
@@ -40,6 +37,25 @@ logger = logging.getLogger(__name__)
 def get_model():
     """Create the Grok model once and reuse it across reruns."""
     return create_model()
+
+
+def units_toggle() -> str:
+    """Draw the sidebar °F/°C toggle and return the chosen units.
+
+    This is the only place units are chosen; the model can't change them.
+    Returns ``"imperial"`` (°F, the default) or ``"metric"`` (°C).
+    """
+    with st.sidebar:
+        choice = st.segmented_control(
+            "Units",
+            SUPPORTED_UNITS,
+            default=DEFAULT_UNITS,
+            required=True,
+            format_func=lambda units: UNIT_LABELS[units][0],
+            key=UNITS_KEY,
+        )
+        st.caption("Applies to new lookups. Earlier cards keep their units.")
+    return choice if choice in SUPPORTED_UNITS else DEFAULT_UNITS
 
 
 def weather_cards(tool_results: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -141,6 +157,8 @@ if problems:
     st.error(setup_message(problems))
     st.stop()
 
+units = units_toggle()
+
 # Each message is {"role", "content"}, plus "cards" (raw tool results) for
 # assistant replies, so cards re-render with the history.
 if "messages" not in st.session_state:
@@ -153,6 +171,9 @@ for message in st.session_state.messages:
             render_card(card)
 
 if prompt := st.chat_input("Ask about the weather in a city…"):
+    # The conversation so far, before this question. The agent trims it to
+    # the last two exchanges, text only.
+    earlier_messages = list(st.session_state.messages)
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -161,8 +182,7 @@ if prompt := st.chat_input("Ask about the weather in a city…"):
         # No streaming: the reply appears only once it is complete.
         with st.spinner("Checking the weather…"):
             try:
-                # Phase 4 replaces DEFAULT_UNITS with the sidebar toggle.
-                result = run_agent(get_model(), prompt, DEFAULT_UNITS)
+                result = run_agent(get_model(), prompt, units, earlier_messages)
                 reply, cards = result.reply, weather_cards(result.tool_results)
             except Exception as exc:  # noqa: BLE001 - user sees a safe message
                 # Log only the error type: messages can carry request details.

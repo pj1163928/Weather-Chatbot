@@ -6,8 +6,9 @@ graded. It is being built in 8 phases. So far the app checks both keys,
 answers current-weather and 5-day forecast questions through the
 `get_current_weather` and `get_weather_forecast` tools and a capped
 tool-calling loop, and shows a weather card or a forecast table in the chat.
-The units toggle, memory, caching and the layered security pipeline are still
-planned. The plan's ticked
+A sidebar °F/°C toggle sets the units, the last 2 exchanges are sent as
+memory for follow-ups, and lookups are cached for 10 minutes. The layered
+security pipeline is still planned. The plan's ticked
 criteria show what is done.
 
 The developer is a beginner, so code should favor clarity.

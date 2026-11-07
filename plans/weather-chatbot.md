@@ -173,13 +173,13 @@ Cache tool results by city and units for 10 minutes. The cache is a small time-l
 
 ### Acceptance criteria
 
-- [ ] Switching the toggle changes units in new lookups, and labels match (°F/mph or °C/m/s).
-- [ ] Asking the model to "use Celsius" doesn't change the units; only the toggle does.
+- [x] Switching the toggle changes units in new lookups, and labels match (°F/mph or °C/m/s).
+- [x] Asking the model to "use Celsius" doesn't change the units; only the toggle does.
 - [ ] "What about tomorrow?" after a Chicago question answers for Chicago.
-- [ ] Only the last 2 exchanges are sent as history.
-- [ ] A repeated lookup within 10 minutes doesn't call OpenWeather again, and a units change creates a separate cache entry.
-- [ ] pytest covers the history-trimming logic.
-- [ ] A normal automated test (not TDD) uses a fake OpenWeather client and a controllable clock to confirm that a repeated request within 10 minutes uses the cache (no second API call), that changing units creates a separate cache entry, and that an entry expires after 10 minutes.
+- [x] Only the last 2 exchanges are sent as history.
+- [x] A repeated lookup within 10 minutes doesn't call OpenWeather again, and a units change creates a separate cache entry.
+- [x] pytest covers the history-trimming logic.
+- [x] A normal automated test (not TDD) uses a fake OpenWeather client and a controllable clock to confirm that a repeated request within 10 minutes uses the cache (no second API call), that changing units creates a separate cache entry, and that an entry expires after 10 minutes.
 
 ### TDD recommendation
 

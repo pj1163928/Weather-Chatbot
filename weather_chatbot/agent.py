@@ -42,6 +42,10 @@ MAX_TOOL_ROUNDS: int = 3
 # Longest reply Grok may write, in tokens. Stops essay- or code-length output.
 MAX_REPLY_TOKENS: int = 500
 
+# Earlier exchanges (one user message plus the assistant's reply) sent with a
+# new question, so follow-ups work. Text only: cards and tool data stay out.
+MAX_HISTORY_EXCHANGES: int = 2
+
 # The tools the model may call, looked up by the name it asks for.
 TOOLS_BY_NAME: dict[str, BaseTool] = {tool.name: tool for tool in WEATHER_TOOLS}
 
@@ -70,6 +74,8 @@ SYSTEM_PROMPT: str = (
     "practical advice based on that weather (for example, whether to bring an "
     "umbrella). Politely decline anything else, such as code, homework, essays "
     "or general questions, and say you can only help with weather. "
+    "Use the units given in the tool results. You can't change units: if asked "
+    "to, tell the user to use the °F/°C toggle in the sidebar. "
     "Keep answers short and plain."
 )
 
@@ -106,12 +112,45 @@ def create_model() -> ChatXAI:
     )
 
 
-def build_messages(user_text: str) -> list[BaseMessage]:
-    """Build the request: the system prompt first, then the user's message.
+def trim_history(chat_history: Sequence[dict[str, Any]]) -> list[dict[str, str]]:
+    """Keep the last ``MAX_HISTORY_EXCHANGES`` exchanges, as text only.
 
-    User text only ever travels in a user message, never in the system prompt.
+    An exchange is a user message followed directly by the assistant's reply.
+    Only ``user`` and ``assistant`` messages count; any other role (system,
+    tool) is skipped. A user message with no reply, or a reply with no
+    question before it, is not a complete exchange and is dropped. Each kept
+    message has only its ``role`` and ``content``, so weather cards and tool
+    data are never sent back to the model. The result is oldest first.
     """
-    return [SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=user_text)]
+    chat = [m for m in chat_history if m.get("role") in ("user", "assistant")]
+    exchanges: list[tuple[str, str]] = []
+    for earlier, later in zip(chat, chat[1:], strict=False):
+        if earlier["role"] == "user" and later["role"] == "assistant":
+            exchanges.append((str(earlier["content"]), str(later["content"])))
+
+    history: list[dict[str, str]] = []
+    for question, reply in exchanges[-MAX_HISTORY_EXCHANGES:]:
+        history.append({"role": "user", "content": question})
+        history.append({"role": "assistant", "content": reply})
+    return history
+
+
+def build_messages(
+    user_text: str, history: Sequence[dict[str, str]] = ()
+) -> list[BaseMessage]:
+    """Build the request: the system prompt, earlier exchanges, then the question.
+
+    ``history`` is already trimmed (see ``trim_history``). User text, old and
+    new, only ever travels in user messages, never in the system prompt.
+    """
+    messages: list[BaseMessage] = [SystemMessage(content=SYSTEM_PROMPT)]
+    for message in history:
+        if message["role"] == "user":
+            messages.append(HumanMessage(content=message["content"]))
+        else:
+            messages.append(AIMessage(content=message["content"]))
+    messages.append(HumanMessage(content=user_text))
+    return messages
 
 
 def call_signature(call: dict[str, Any]) -> str:
@@ -139,9 +178,16 @@ def run_tool_call(call: dict[str, Any], units: str) -> dict[str, Any]:
 
 
 def run_agent(
-    model: ToolCallingModel, user_text: str, units: str = DEFAULT_UNITS
+    model: ToolCallingModel,
+    user_text: str,
+    units: str = DEFAULT_UNITS,
+    chat_history: Sequence[dict[str, Any]] = (),
 ) -> AgentResult:
     """Answer one question, letting the model call the weather tools.
+
+    ``chat_history`` is the conversation before this question, as the UI
+    stores it. It is trimmed here with ``trim_history``, so whatever the
+    caller passes, the model only sees the last two exchanges as text.
 
     Each pass of the loop asks the model for its next step. If it asks for
     tools, they run (one "tool round") and their results go back to it. After
@@ -150,7 +196,7 @@ def run_agent(
     ``TOOL_LIMIT_MESSAGE``.
     """
     bound_model = model.bind_tools(WEATHER_TOOLS)
-    messages = build_messages(user_text)
+    messages = build_messages(user_text, trim_history(chat_history))
     tool_results: list[dict[str, Any]] = []
     calls_already_run: set[str] = set()
 

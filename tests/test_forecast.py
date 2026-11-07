@@ -259,6 +259,7 @@ def test_parse_forecast_adds_location_and_units(sample_json):
     assert result["kind"] == "forecast"
     assert result["location"] == "Seattle, Washington, US"
     assert result["units"] == "imperial"
+    assert result["temperature_unit"] == "°F"
     assert len(result["days"]) == FORECAST_DAYS
 
 
@@ -358,3 +359,4 @@ def test_the_forecast_tool_passes_app_units_to_openweather(fake_openweather):
 
     assert fake_openweather.forecast_requests[0]["units"] == "metric"
     assert result["units"] == "metric"
+    assert result["temperature_unit"] == "°C"

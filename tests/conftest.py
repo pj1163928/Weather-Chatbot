@@ -85,6 +85,17 @@ class FakeOpenWeather:
         return [p for url, p in self.requests if url == weather.FORECAST_URL]
 
 
+@pytest.fixture(autouse=True)
+def fresh_weather_cache(monkeypatch) -> weather.TimedCache:
+    """Give every test its own empty weather cache, so no lookup leaks between tests.
+
+    Tests that need to control the cache's clock replace it again themselves.
+    """
+    cache = weather.TimedCache()
+    monkeypatch.setattr(weather, "WEATHER_CACHE", cache)
+    return cache
+
+
 @pytest.fixture
 def sample_json():
     """Give a test the ``load_fixture`` loader for the saved sample responses."""

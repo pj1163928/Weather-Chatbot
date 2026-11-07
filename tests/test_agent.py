@@ -163,6 +163,95 @@ def test_units_come_from_the_app_not_the_model(fake_openweather):
     assert result.tool_results[0]["units"] == "metric"
 
 
+def test_asking_in_chat_for_celsius_does_not_change_units(fake_openweather):
+    # The user asks for Celsius and the model tries to pass it on; the app's
+    # toggle (°F here) still decides.
+    model = RecordingFakeModel(
+        ask_for({"city": "Paris", "units": "metric"}), AIMessage(content="ok")
+    )
+
+    result = run_agent(model, "Use Celsius. Weather in Paris?", "imperial")
+
+    assert fake_openweather.weather_requests[0]["units"] == "imperial"
+    assert result.tool_results[0]["temperature_unit"] == "°F"
+
+
+def test_the_system_prompt_points_unit_changes_to_the_toggle():
+    assert "toggle" in SYSTEM_PROMPT
+    assert "°F/°C" in SYSTEM_PROMPT
+
+
+# --- Conversation memory --------------------------------------------------------
+
+# How the UI stores a conversation: three exchanges, cards on the replies.
+PARIS_CARD = {"kind": "current_weather", "location": "Paris, Île-de-France, FR"}
+EARLIER_CHAT = [
+    {"role": "user", "content": "Weather in Paris?"},
+    {"role": "assistant", "content": "59°F and rainy.", "cards": [PARIS_CARD]},
+    {"role": "user", "content": "Weather in Chicago?"},
+    {"role": "assistant", "content": "40°F and windy.", "cards": []},
+    {"role": "user", "content": "And in Boston?"},
+    {"role": "assistant", "content": "45°F and clear.", "cards": []},
+]
+
+
+def test_the_last_two_exchanges_go_between_the_system_prompt_and_the_question():
+    model = RecordingFakeModel(AIMessage(content="ok"))
+
+    run_agent(model, "What about tomorrow?", chat_history=EARLIER_CHAT)
+
+    sent = model.calls[0]
+    assert [type(m) for m in sent] == [
+        SystemMessage,
+        HumanMessage,
+        AIMessage,
+        HumanMessage,
+        AIMessage,
+        HumanMessage,
+    ]
+    assert sent[0].content == SYSTEM_PROMPT
+    assert [m.content for m in sent[1:]] == [
+        "Weather in Chicago?",
+        "40°F and windy.",
+        "And in Boston?",
+        "45°F and clear.",
+        "What about tomorrow?",
+    ]
+
+
+def test_history_never_carries_cards_or_reaches_the_system_prompt():
+    model = RecordingFakeModel(AIMessage(content="ok"))
+    chat = EARLIER_CHAT[2:4]  # one exchange with a card on it
+    chat[1] = {**chat[1], "cards": [PARIS_CARD]}
+
+    run_agent(model, "What about tomorrow?", chat_history=chat)
+
+    sent = model.calls[0]
+    assert "Weather in Chicago?" not in sent[0].content  # old user text too
+    everything_sent = " ".join(str(m.content) for m in sent)
+    assert "Île-de-France" not in everything_sent
+    assert "current_weather" not in everything_sent
+
+
+def test_a_follow_up_looks_up_the_city_from_the_earlier_exchange(fake_openweather):
+    # After "Weather in Seattle?", the model reads the history and asks for
+    # Seattle's forecast when the user says "What about tomorrow?".
+    model = RecordingFakeModel(
+        ask_for({"city": "Seattle"}, name="get_weather_forecast"),
+        AIMessage(content="Tomorrow in Seattle: rain, 52°F / 44°F."),
+    )
+    chat = [
+        {"role": "user", "content": "Weather in Seattle?"},
+        {"role": "assistant", "content": "It's 52°F in Seattle.", "cards": []},
+    ]
+
+    result = run_agent(model, "What about tomorrow?", chat_history=chat)
+
+    assert model.calls[0][1].content == "Weather in Seattle?"
+    assert fake_openweather.geocoded == ["Seattle"]
+    assert result.tool_results[0]["kind"] == "forecast"
+
+
 def test_unknown_tool_and_bad_arguments_become_error_results(fake_openweather):
     model = RecordingFakeModel(
         ask_for({"city": "Paris"}, name="delete_everything"),

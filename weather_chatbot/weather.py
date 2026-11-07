@@ -1,8 +1,9 @@
 """Weather tools module: city validation, OpenWeather lookups and the tools.
 
 Two tools share one path (validate the city, geocode it, fetch by
-coordinates): ``get_current_weather`` and ``get_weather_forecast``. Phase 4
-adds caching.
+coordinates): ``get_current_weather`` and ``get_weather_forecast``.
+Successful OpenWeather responses are cached for 10 minutes by tool, city and
+units.
 
 Every tool returns a plain dict. A successful lookup has ``"kind":
 "current_weather"`` or ``"kind": "forecast"``. A problem has ``"kind":
@@ -12,9 +13,11 @@ contain the API key.
 
 import logging
 import re
+import threading
+import time
 import unicodedata
 from collections import Counter
-from collections.abc import Callable
+from collections.abc import Callable, Hashable
 from datetime import UTC, date, datetime, timedelta, timezone
 from typing import Annotated, Any
 
@@ -40,8 +43,15 @@ REQUEST_TIMEOUT_SECONDS: int = 10
 # Units OpenWeather understands. The app picks one; the model never does.
 SUPPORTED_UNITS: tuple[str, ...] = ("imperial", "metric")
 
-# Phase 4 replaces this fixed choice with the sidebar °F/°C toggle.
+# Used when no units are given. The UI always passes the sidebar toggle's choice.
 DEFAULT_UNITS: str = "imperial"
+
+# Labels for each units setting: (temperature, wind speed). Tool results carry
+# them, so the model's reply and the cards use the same units.
+UNIT_LABELS: dict[str, tuple[str, str]] = {
+    "imperial": ("°F", "mph"),
+    "metric": ("°C", "m/s"),
+}
 
 # OpenWeather icon codes look like "10d" or "01n".
 ICON_PATTERN: re.Pattern[str] = re.compile(r"\d{2}[dn]")
@@ -56,6 +66,13 @@ FORECAST_DAYS: int = 5
 # OpenWeather's forecast has one entry every 3 hours, so a whole day has 8.
 # A local date with fewer entries than this in the response is "partial".
 ENTRIES_PER_FULL_DAY: int = 8
+
+# A cached OpenWeather response is reused for this many seconds (10 minutes),
+# so repeat questions are instant and stay within the free tier.
+CACHE_TTL_SECONDS: float = 600
+
+# The most responses the cache holds. Past this, the oldest is dropped.
+MAX_CACHE_ENTRIES: int = 128
 
 # --- Messages the model sees in error results ---------------------------------
 
@@ -159,6 +176,8 @@ def parse_current_weather(
         # Only a well-formed code is kept, because the UI builds a URL from it.
         "icon": icon if ICON_PATTERN.fullmatch(icon) else None,
         "units": units,
+        "temperature_unit": UNIT_LABELS[units][0],
+        "wind_speed_unit": UNIT_LABELS[units][1],
     }
 
 
@@ -263,6 +282,7 @@ def parse_forecast(
         "kind": "forecast",
         "location": location,
         "units": units,
+        "temperature_unit": UNIT_LABELS[units][0],
         "days": summarize_forecast(data, now),
     }
 
@@ -272,6 +292,83 @@ def utc_now() -> datetime:
     return datetime.now(UTC)
 
 
+class TimedCache:
+    """A small cache whose entries expire ``ttl_seconds`` after being stored.
+
+    An entry is fresh while its age is under ``ttl_seconds``; at exactly
+    ``ttl_seconds`` it has expired. When storing would go over
+    ``max_entries``, expired entries are dropped first, then the oldest.
+
+    ``clock`` returns the current time in seconds. It defaults to
+    ``time.monotonic``; tests pass a fake clock so they can jump ahead
+    without waiting.
+    """
+
+    def __init__(
+        self,
+        ttl_seconds: float = CACHE_TTL_SECONDS,
+        max_entries: int = MAX_CACHE_ENTRIES,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self.ttl_seconds = ttl_seconds
+        self.max_entries = max_entries
+        self.clock = clock
+        # key -> (time stored, value). Dicts keep insertion order, oldest first.
+        self._entries: dict[Hashable, tuple[float, Any]] = {}
+        # Streamlit serves each browser tab from its own thread.
+        self._lock = threading.Lock()
+
+    def __len__(self) -> int:
+        """How many entries are stored, including any not yet cleaned out."""
+        return len(self._entries)
+
+    def _is_fresh(self, stored_at: float, now: float) -> bool:
+        return now - stored_at < self.ttl_seconds
+
+    def get(self, key: Hashable) -> Any | None:
+        """Return the value stored under ``key``, or None if missing or expired."""
+        with self._lock:
+            entry = self._entries.get(key)
+            if entry is None:
+                return None
+            stored_at, value = entry
+            if not self._is_fresh(stored_at, self.clock()):
+                del self._entries[key]
+                return None
+            return value
+
+    def put(self, key: Hashable, value: Any) -> None:
+        """Store ``value`` under ``key``, keeping at most ``max_entries``."""
+        with self._lock:
+            now = self.clock()
+            self._entries.pop(key, None)  # re-stored entries count as newest
+            self._entries[key] = (now, value)
+            if len(self._entries) > self.max_entries:
+                self._entries = {
+                    k: entry
+                    for k, entry in self._entries.items()
+                    if self._is_fresh(entry[0], now)
+                }
+            while len(self._entries) > self.max_entries:
+                del self._entries[next(iter(self._entries))]  # the oldest
+
+
+# The cache every lookup shares. It lives as long as the app process, so it
+# lasts across Streamlit reruns. Tests replace it with a fresh one.
+WEATHER_CACHE = TimedCache()
+
+
+def cache_key(url: str, city: str, units: str) -> tuple[str, str, str]:
+    """The cache key for one lookup: which tool (its URL), the city and units.
+
+    The city is tidied the way it is sent to geocoding and compared without
+    case, so "Paris" and "paris " share an entry. Different units, or the
+    other tool, always get a separate entry.
+    """
+    name = geocoding_query(unicodedata.normalize("NFC", city)).casefold()
+    return (url, name, units)
+
+
 def look_up_weather(
     city: str,
     units: str,
@@ -279,32 +376,46 @@ def look_up_weather(
     parse: Callable[[Any, str], dict[str, Any]],
     lookup_name: str,
 ) -> dict[str, Any]:
-    """The path both tools share: validate, geocode, fetch by coordinates, parse.
+    """The path both tools share: validate, check the cache, geocode, fetch, parse.
 
     ``parse(data, location)`` turns OpenWeather's JSON into the tool's result.
     ``lookup_name`` names the lookup in log lines (never the URL, which would
     carry the key). Problems come back as error results, never as exceptions,
     so the model can explain them politely.
+
+    The cache holds the resolved location and OpenWeather's raw JSON, not the
+    parsed result, so a cached forecast still works out "Today" from the
+    current time. Only a response that parsed successfully is cached; errors
+    never are, so the next question tries OpenWeather again.
     """
     if units not in SUPPORTED_UNITS:
         raise ValueError(f"Unsupported units: {units!r}")
     # Checked before any network call, so injected arguments never leave the app.
     if not is_valid_city(city):
         return error_result("invalid_city", INVALID_CITY_MESSAGE)
+    key = cache_key(url, city, units)
+    cached = WEATHER_CACHE.get(key)
     try:
-        match = geocode(city)
-        if match is None:
-            return error_result("city_not_found", CITY_NOT_FOUND_MESSAGE)
-        data = fetch_json(
-            url,
-            {
-                "lat": match["lat"],
-                "lon": match["lon"],
-                "units": units,
-                "appid": openweather_key(),
-            },
-        )
-        return parse(data, format_location(match))
+        if cached is not None:
+            location, data = cached
+        else:
+            match = geocode(city)
+            if match is None:
+                return error_result("city_not_found", CITY_NOT_FOUND_MESSAGE)
+            location = format_location(match)
+            data = fetch_json(
+                url,
+                {
+                    "lat": match["lat"],
+                    "lon": match["lon"],
+                    "units": units,
+                    "appid": openweather_key(),
+                },
+            )
+        result = parse(data, location)
+        if cached is None:
+            WEATHER_CACHE.put(key, (location, data))
+        return result
     except WeatherServiceError as exc:
         # Phase 7 replaces this with full error mapping and redacted logging.
         logger.warning("%s lookup failed: %s", lookup_name, exc)

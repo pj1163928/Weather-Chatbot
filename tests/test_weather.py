@@ -80,6 +80,8 @@ def test_parse_current_weather_from_sample_json(sample_json):
         "condition": "light rain",
         "icon": "10d",
         "units": "imperial",
+        "temperature_unit": "°F",
+        "wind_speed_unit": "mph",
     }
 
 
@@ -202,6 +204,10 @@ def test_the_tool_passes_app_units_to_openweather(fake_openweather):
 
     assert fake_openweather.weather_requests[0]["units"] == "metric"
     assert card["location"] == "London, England, GB"
+    # The labels travel with the data, so the model's reply matches the card.
+    assert card["units"] == "metric"
+    assert card["temperature_unit"] == "°C"
+    assert card["wind_speed_unit"] == "m/s"
 
 
 # --- The HTTP wrapper -------------------------------------------------------

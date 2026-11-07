@@ -5,6 +5,31 @@ and the decisions made along the way. Newest entries first.
 
 ---
 
+## 2026-11-06 — Weather chatbot: Phase 4/8, Units toggle, follow-ups, caching
+
+### Prompts
+
+1. The `/implement` skill, given `weather-chatbot phase 4`.
+2. "Approved, with two small additions: 1. Cache tests: Explicitly test expiration at the 600-second boundary, separation between tools and units, failed responses not being cached, and eviction when the 128-entry limit is exceeded. 2. History tests: Verify that only complete user/assistant exchanges are retained, in chronological order, and that system/tool messages and attached weather-card payloads never enter the history sent to Grok."
+3. "Looks good move onto next test" (approved the red history-trimming test).
+
+### Summary
+
+- **Outcome:** A sidebar °F/°C toggle (`st.segmented_control`, °F by default, can't be cleared) sets the units for new lookups, and tool results carry their unit labels so replies match the cards. Grok now receives the last 2 complete exchanges as text, so follow-ups work. OpenWeather responses are cached for 10 minutes by tool, city and units. 141 tests pass (36 new); `ruff check` and `ruff format` are clean; the project has no type checker. The real Streamlit server loaded the page with the toggle on °F, switched to °C and reran with no console warnings. No live Grok or OpenWeather calls were made.
+- **Changes:**
+  - `weather_chatbot/agent.py` — `MAX_HISTORY_EXCHANGES = 2` and `trim_history()`; `build_messages()` puts history between the system prompt and the question; `run_agent()` takes `chat_history` and trims it itself; one system-prompt sentence sends unit requests to the toggle.
+  - `weather_chatbot/weather.py` — `UNIT_LABELS` moved here from `app.py`, and results gain `temperature_unit` / `wind_speed_unit`; `CACHE_TTL_SECONDS`, `MAX_CACHE_ENTRIES`, `TimedCache` (injectable clock, lock, expired-then-oldest eviction), `WEATHER_CACHE` and `cache_key()`; `look_up_weather()` checks the cache after city validation and stores only successful responses.
+  - `app.py` — `units_toggle()` in the sidebar with `UNITS_KEY`; passes the units and the earlier messages to `run_agent()`.
+  - `tests/test_history.py`, `tests/test_cache.py` — new. `tests/conftest.py` — autouse `fresh_weather_cache`. `tests/test_agent.py`, `tests/test_app.py`, `tests/test_weather.py`, `tests/test_forecast.py` — history in the request, "use Celsius" ignored, the toggle, unit labels.
+  - `docs/ARCHITECTURE.md`, `docs/SECURITY.md`, `docs/TESTING.md`, `CLAUDE.md` — new names, the request flow with the toggle, memory and cache, new controls, test files and patterns, current-state summary.
+  - `plans/weather-chatbot.md` — six of seven Phase 4 criteria ticked.
+- **TDD:** One behavior, red on an assertion against a stub that returned `[]` (7 of 8 cases failed), then green: `trim_history()` keeps only the last 2 complete user/assistant exchanges, oldest first, as role and text only, dropping unanswered questions, replies with no question, cards and system or tool entries.
+- **Decisions:** An exchange is a user message followed directly by the assistant's reply, and other roles are skipped before pairing. The cache stores the resolved location plus raw OpenWeather JSON and re-parses on every hit, so a cached forecast still works out "Today". Errors are never cached. The key is the tool's URL, the city as sent to geocoding (case-folded, NFC), and the units. An entry is fresh under 600 s and expired at exactly 600 s. `MAX_CACHE_ENTRIES = 128`, dropping expired entries first, then the oldest. The clock is `time.monotonic`, passed in as a callable, for Phase 5 to follow. The cache is module-level, so it is shared across reruns and tabs. Earlier cards keep their own units after the toggle changes.
+- **Deviations:** The user asked for explicit cache tests (the 600 s boundary, tool and units separation, failures not cached, 128-entry eviction) and history tests (complete exchanges only, in order, no system/tool messages or card payloads); all were added. After the TDD test went green, the build continued without a separate stop, because the user had said to move on and there were no more TDD behaviors. "What about tomorrow?" after a Chicago question is left unticked: it depends on live Grok behavior, which the user checks by hand. The history and the follow-up lookup are covered with fake models.
+- **Sideways:** The Phase 2 parsing test failed as expected once results gained unit labels, and was updated. A deliberate mutation (`<` to `<=` in the freshness check) made three cache tests fail, confirming the 600 s boundary is pinned. Sending `°C` to the agent API from Git Bash's `curl` failed on encoding, so the toggle was driven with a small Python script instead.
+
+---
+
 ## 2026-11-06 — Weather chatbot: Phase 3/8, 5-day forecast
 
 ### Prompts

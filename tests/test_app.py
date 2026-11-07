@@ -20,12 +20,14 @@ class ScriptedFakeModel:
     def __init__(self, *replies: AIMessage) -> None:
         self.replies = list(replies)
         self.calls = 0
+        self.requests: list[list] = []  # the messages sent with each call
 
     def bind_tools(self, tools):
         return self
 
     def invoke(self, input):
         self.calls += 1
+        self.requests.append(list(input))
         return self.replies.pop(0)
 
 
@@ -243,3 +245,84 @@ def test_a_failing_xai_call_shows_a_friendly_message(use_env_file, monkeypatch):
     reply = assistant_messages(at)[-1].markdown[0].value
     assert reply.startswith("Sorry, the weather assistant is unavailable")
     assert "api.x.ai" not in reply
+
+
+# --- Units toggle and conversation memory ----------------------------------------
+
+
+def units_toggle(at: AppTest):
+    """The sidebar °F/°C toggle."""
+    (toggle,) = at.sidebar.segmented_control
+    return toggle
+
+
+def test_the_units_toggle_is_in_the_sidebar_and_starts_on_fahrenheit(
+    use_env_file, no_model_allowed
+):
+    use_env_file(BOTH_KEYS)
+
+    at = AppTest.from_file(APP).run()
+
+    toggle = units_toggle(at)
+    assert toggle.label == "Units"
+    assert toggle.options == ["°F", "°C"]
+    assert toggle.value == "imperial"
+
+
+def test_switching_to_celsius_changes_new_lookups_and_keeps_old_cards(
+    use_env_file, fake_openweather, monkeypatch
+):
+    use_env_file(BOTH_KEYS)
+    fake = ScriptedFakeModel(
+        asks_for_weather_in("Paris"),
+        AIMessage(content="It's 59°F in Paris."),
+        asks_for_weather_in("London"),
+        AIMessage(content="It's 52°C in London."),
+    )
+    monkeypatch.setattr(agent, "create_model", lambda: fake)
+    at = AppTest.from_file(APP).run()
+
+    at.chat_input[0].set_value("Weather in Paris?").run()
+    units_toggle(at).set_value("metric").run()
+    at.chat_input[0].set_value("Weather in London?").run()
+
+    assert not at.exception
+    assert [p["units"] for p in fake_openweather.weather_requests] == [
+        "imperial",
+        "metric",
+    ]
+    paris, london = assistant_messages(at)
+    # The sample readings don't change with units; only the labels do.
+    assert card_metrics(paris)["Temperature"] == "59°F"
+    assert card_metrics(paris)["Wind"] == "9 mph"
+    assert card_metrics(london)["Temperature"] == "52°C"
+    assert card_metrics(london)["Wind"] == "7 m/s"
+
+
+def test_a_follow_up_sends_the_earlier_exchange_as_text_only(
+    use_env_file, fake_openweather, monkeypatch
+):
+    use_env_file(BOTH_KEYS)
+    fake = ScriptedFakeModel(
+        asks_for_weather_in("Seattle"),
+        AIMessage(content="It's 52°F in Seattle."),
+        asks_for_weather_in("Seattle", tool="get_weather_forecast"),
+        AIMessage(content="Tomorrow in Seattle: rain likely."),
+    )
+    monkeypatch.setattr(agent, "create_model", lambda: fake)
+    at = AppTest.from_file(APP).run()
+
+    at.chat_input[0].set_value("What's the weather in Seattle?").run()
+    at.chat_input[0].set_value("What about tomorrow?").run()
+
+    assert not at.exception
+    follow_up_request = fake.requests[2]  # the first call for the 2nd question
+    assert [m.content for m in follow_up_request[1:]] == [
+        "What's the weather in Seattle?",
+        "It's 52°F in Seattle.",
+        "What about tomorrow?",
+    ]
+    # The earlier card's data stayed out of the request.
+    assert "Washington" not in " ".join(str(m.content) for m in follow_up_request)
+    assert fake_openweather.geocoded == ["Seattle", "Seattle"]
+    assert len(assistant_messages(at)[1].dataframe) == 1
