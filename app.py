@@ -3,7 +3,6 @@
 Run with:  uv run streamlit run app.py
 """
 
-import logging
 from datetime import date
 from typing import Any
 
@@ -17,6 +16,9 @@ from weather_chatbot.security import (
     check_free_gate,
     check_scope,
     create_classifier_model,
+    friendly_error,
+    log_error,
+    scan_output,
 )
 from weather_chatbot.weather import (
     DEFAULT_UNITS,
@@ -25,15 +27,8 @@ from weather_chatbot.weather import (
     plain_condition,
 )
 
-# Shown when the xAI call fails. Phase 7 replaces this with full error mapping
-# and redacted logging.
-UNAVAILABLE_MESSAGE = (
-    "Sorry, the weather assistant is unavailable right now. Please try again "
-    "shortly. If this keeps happening, check that `XAI_API_KEY` in `.env` is "
-    "correct."
-)
-
-# The icon shown on a fixed refusal from the free gate or the classifier.
+# The icon shown on a fixed refusal from the free gate, the classifier or the
+# output scan.
 BLOCKED_ICON = ":material/block:"
 
 # The session-state key of the sidebar °F/°C toggle.
@@ -44,8 +39,6 @@ ICON_URL = "https://openweathermap.org/img/wn/{code}@2x.png"
 
 # Tool results with these kinds are drawn as cards. Errors are not.
 CARD_KINDS: tuple[str, ...] = ("current_weather", "forecast")
-
-logger = logging.getLogger(__name__)
 
 
 @st.cache_resource
@@ -244,12 +237,17 @@ def blocked_answer(block: Block) -> dict[str, Any]:
 def ask_grok(
     text: str, units: str, earlier_messages: list[dict[str, Any]]
 ) -> dict[str, Any]:
-    """Answer a question that passed the free gate: the classifier, then the agent.
+    """Answer a question that passed the free gate: classifier, agent, output scan.
 
     Returns the assistant message to show and store. The classifier sees the
     same last two exchanges as the agent. If it says NO, the agent never
-    runs. If either Grok call fails, the user gets ``UNAVAILABLE_MESSAGE``
-    and nothing else runs.
+    runs. The agent's finished reply is then scanned (``scan_output``): if it
+    holds a key, a key-like string, the canary or a code fence, the user gets
+    the standard refusal instead, with no cards, marked ``blocked``.
+
+    If anything fails, the user gets a fixed, friendly message from
+    ``friendly_error`` (never the exception's text), the redacted details go
+    to the security log, and nothing else runs.
     """
     try:
         history = trim_history(earlier_messages)
@@ -258,9 +256,14 @@ def ask_grok(
             return blocked_answer(block)
         result = run_agent(get_model(), text, units, earlier_messages)
     except Exception as exc:  # noqa: BLE001 - user sees a safe message
-        # Log only the error type: messages can carry request details.
-        logger.warning("xAI call failed: %s", type(exc).__name__)
-        return {"role": "assistant", "content": UNAVAILABLE_MESSAGE, "cards": []}
+        log_error("xai", exc)
+        return {"role": "assistant", "content": friendly_error(exc), "cards": []}
+
+    # The last check before anything is shown: no streaming, so unscanned
+    # text never reaches the page.
+    block = scan_output(result.reply, text)
+    if block is not None:
+        return blocked_answer(block)
     return {
         "role": "assistant",
         "content": result.reply,
@@ -271,8 +274,8 @@ def ask_grok(
 def render_reply(message: dict[str, Any]) -> None:
     """Draw a reply's text: a fixed refusal as a warning, anything else as Markdown.
 
-    A refusal from the free gate or the classifier is the app's own text,
-    never the model's.
+    A refusal from the free gate, the classifier or the output scan is the
+    app's own text, never the model's.
     """
     if message.get("blocked"):
         st.warning(message["content"], icon=BLOCKED_ICON)
@@ -302,9 +305,9 @@ units = units_toggle()
 
 # Each message is {"role", "content"}, plus "cards" (raw tool results) for
 # assistant replies, so cards re-render with the history. A message the free
-# gate or the classifier blocked, and its refusal, also have "blocked": True,
-# which keeps them
-# out of the model's memory. The rate-limit counters live in their own
+# gate, the classifier or the output scan blocked, and its refusal, also have
+# "blocked": True, which keeps them out of the model's memory. The rate-limit
+# counters live in their own
 # session-state entry, which only the RateLimiter changes, so clearing this
 # list doesn't reset them.
 if "messages" not in st.session_state:

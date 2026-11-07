@@ -5,6 +5,64 @@ and the decisions made along the way. Newest entries first.
 
 ---
 
+## 2026-11-07 — Weather chatbot: Phase 7/8, Output scan + safe errors
+
+### Prompts
+
+1. The `/implement` skill, given `weather-chatbot phase 7`.
+2. "Approved, with two small recommendations. The brief and all three TDD behaviors are sound. No architectural changes are needed. 1. Output scanning: Approved. Make sure key-value matching covers both XAI_API_KEY and OPENWEATHER_API_KEY, and that ordinary weather values (temperatures, dates, percentages, times) don't trigger false positives. 2. Friendly errors: Approved. Keep the mapping deterministic and ensure raw exception messages never reach the browser. 3. Log redaction: Approved. Add one assertion that the stack trace contains file, line and source-code information but excludes exception messages and chained exceptions. This verifies the other important logging security requirement."
+3. "Looks good move to next test" (approved the red output-scan test).
+4. "looks good move to next" (approved the red friendly-error test).
+5. "Looks good move onto building" (approved the red log-redaction test and asked to build the rest of the phase).
+
+### Summary
+
+- **Outcome:** Every reply is now scanned before it is shown. A reply holding a loaded key, a key-like string, the system prompt's new canary or a code fence is replaced by the standard refusal, with no cards and one `output_scan` log line. Every xAI and OpenWeather failure gives the user a fixed, friendly message. Its details go only to the security log as a `layer=error` event: a safe detail, then an indented stack trace with no exception messages or chained exceptions, all redacted. 378 tests pass (36 new, plus one Phase 6 test updated). `ruff check` and `ruff format` are clean; the project has no type checker. The real Streamlit server started with the real `.env`, picked up `showErrorDetails = "none"` and rendered the chat page with no console warnings. No Grok or OpenWeather call was made. One criterion (OpenWeather failures as the user sees them) is left for the manual run, because Grok words that reply.
+- **Changes:**
+  - `weather_chatbot/security.py`:
+    - The output scan: `CANARY`, `CODE_FENCE_PATTERN`, `LAYER_OUTPUT_SCAN` and `scan_output()`.
+    - Safe errors: `LAYER_ERROR`, `UNAVAILABLE_MESSAGE` (moved from `app.py`, now without the key hint), the three `XAI_*_MESSAGE`s and `friendly_error()`.
+    - Error logging: `ERROR_DETAIL_LENGTH`, `REQUEST_DETAIL_PATTERNS`, `CONTINUATION_INDENT`, `clean_error_text()`, `describe_error()`, `stack_trace()`, `RedactingFormatter` (now the log file's formatter) and `log_error()`.
+    - `REQUEST_TIMEOUT_SECONDS` now lives here.
+  - `weather_chatbot/weather.py` — `WeatherServiceError.problem`, `service_problem()`, the timeout, busy and key-rejected messages, `SERVICE_ERROR_MESSAGES`, and `log_error()` in place of the terminal logger. `lookup_name` became `log_source`.
+  - `weather_chatbot/agent.py` — the canary at the end of `SYSTEM_PROMPT`.
+  - `app.py` — `ask_grok()` scans the reply, shows `friendly_error()` and logs with `log_error("xai", …)`. The terminal logger is gone.
+  - `.streamlit/config.toml` — new: `client.showErrorDetails = "none"`.
+  - `pyproject.toml` / `uv.lock` — `openai==3.46.0` pinned. It was already installed through `langchain-xai`; it is pinned now because the code catches its exception types directly.
+  - Tests:
+    - `tests/test_output_scan.py` and `tests/test_errors.py` — new.
+    - `tests/test_weather.py` — failure kinds, plus the full failure path with leaky `requests` errors.
+    - `tests/test_app.py` — leaking replies, a normal reply, xAI failures in the browser; the Phase 6 outage test now expects one `error` event.
+    - `tests/test_agent.py` — the canary.
+  - `docs/SECURITY.md`, `docs/ARCHITECTURE.md`, `docs/TESTING.md`, `CLAUDE.md` — new "output scan" and "safe errors" sections, the request-flow step, module tables, gotchas and test coverage. `plans/weather-chatbot.md` — six Phase 7 criteria ticked.
+- **TDD:** Three behaviors, each red on an assertion against a stub, then green:
+  - The output scan blocks both loaded keys (fakes not shaped like keys, in any case, inside a URL), key-like strings, the canary (also lower-case and split by a zero-width space) and code fences. It lets through seven ordinary weather replies full of temperatures, percentages, times, dates and coordinates.
+  - xAI failures map deterministically to friendly messages:
+    - a timeout to "took too long"
+    - 429 to "busy"
+    - 401/403 to "check `XAI_API_KEY`"
+    - anything else to "unavailable"
+
+    No exception text, type, URL, `Traceback` or key reaches the message.
+  - `log_error()` given an exception with both keys, an `appid=` URL, a `Bearer` header and a chained cause writes `[REDACTED]`, no piece of either key, and no URL, query string or header. Its stack trace has file, line and source code but no exception messages and nothing from the chained exception (the user's added assertion).
+- **Decisions:**
+  - `REQUEST_TIMEOUT_SECONDS` moved from `weather.py` to `security.py`, so `weather.py` could import `log_error()` without a circular import. `weather.REQUEST_TIMEOUT_SECONDS` still works.
+  - The canary is a fixed, visible constant (`WXBOT-CANARY-7Q4M-K9TZ-2R6P`), shaped so it never looks like a key. The scan matches it after normalization.
+  - A blocked reply shows no cards and is marked `blocked`, so neither the leak nor its question goes back to Grok.
+  - The `output_scan` log line quotes the user's question, like every other layer, not the reply.
+  - Errors go to the same `logs/security.log` as blocks, as `layer=error` events. There is no terminal logging any more.
+  - Known xAI errors are logged by status alone ("xAI HTTP 401"). xAI's text can echo a masked piece of the key that redaction can't recognize.
+  - Request-detail removal (`[URL]`, `[QUERY]`, `[HEADER]`) applies to error text only. The formatter redacts keys on every line but leaves user snippets as Phase 5 wrote them.
+  - OpenWeather failures keep the `service_unavailable` error code. The message varies by problem: the 401 message mentions the 2-hour key activation delay.
+- **Deviations:** None. The user's three recommendations were folded into the tests: exact-value matching for both keys and ordinary weather values in the scan test, a determinism check in the error test, and the stack-trace contents assertion in the redaction test.
+- **Sideways:**
+  - Twice, a Python script inside a Bash heredoc turned `"\n"` into a real newline and broke a file: the redaction test's `join` lines, then the system prompt. Both were caught at once by a syntax error and fixed with the editor; no assertion changed. Later edits used the editor.
+  - A scratch command started with a bare `cat > "$TMPDIR/…"` with `TMPDIR` unset, so it waited on input and timed out. It was stopped and the script was written with the editor.
+  - The new OpenWeather test first flagged `"appid": openweather_key()` in the stack trace. That is source code, not a value, so the test now checks for the query-string form `appid=` instead. It had also expected `ReadTimeout` where a bare `requests.Timeout` was raised.
+  - The Phase 6 test `test_a_failing_classifier_shows_a_friendly_message_and_skips_the_agent` asserted an empty log on an outage. Phase 7 requires the redacted details to be logged, so it now expects exactly one `error` event.
+
+---
+
 ## 2026-11-07 — Weather chatbot: Phase 6/8, Classifier + strict scope
 
 ### Prompts

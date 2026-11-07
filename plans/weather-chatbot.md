@@ -291,13 +291,13 @@ Wrap all external failures (OpenWeather or xAI errors, timeouts, rate-limit resp
 
 ### Acceptance criteria
 
-- [ ] Replies containing a key value, a key-like pattern, the canary or a code fence are replaced with the standard refusal and logged.
-- [ ] Normal weather replies, including ones with numbers and times, pass the scan (no false positives).
+- [x] Replies containing a key value, a key-like pattern, the canary or a code fence are replaced with the standard refusal and logged.
+- [x] Normal weather replies, including ones with numbers and times, pass the scan (no false positives).
 - [ ] With OpenWeather unreachable or the key invalid, the user sees a friendly message and no stack trace.
-- [ ] With the xAI call failing, the user sees a friendly message and no stack trace.
-- [ ] pytest covers each scanner trigger, a set of clean weather replies, and error-to-friendly-message mapping.
-- [ ] Tests deliberately raise exceptions whose messages contain each API key, including an OpenWeather-style URL with `appid=<key>`, log them through the normal error path, and confirm the log file contains `[REDACTED]` and neither key.
-- [ ] No log line contains a raw request URL, query string or header.
+- [x] With the xAI call failing, the user sees a friendly message and no stack trace.
+- [x] pytest covers each scanner trigger, a set of clean weather replies, and error-to-friendly-message mapping.
+- [x] Tests deliberately raise exceptions whose messages contain each API key, including an OpenWeather-style URL with `appid=<key>`, log them through the normal error path, and confirm the log file contains `[REDACTED]` and neither key.
+- [x] No log line contains a raw request URL, query string or header.
 
 ### TDD recommendation
 

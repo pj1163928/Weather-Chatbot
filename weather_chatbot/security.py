@@ -12,21 +12,26 @@ import os
 import re
 import threading
 import time
+import traceback
 import unicodedata
 from collections.abc import Callable, MutableMapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, Protocol
 
+import openai
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import Runnable
 from langchain_xai import ChatXAI
 from pydantic import BaseModel, Field
 
 from weather_chatbot.config import secret_values
-from weather_chatbot.weather import REQUEST_TIMEOUT_SECONDS
 
 # --- Security limits --------------------------------------------------------
+
+# Every external call (OpenWeather and xAI) gives up after this many seconds,
+# so the app never hangs.
+REQUEST_TIMEOUT_SECONDS: int = 10
 
 # Messages one chat session may send. Message 21 is blocked.
 MAX_MESSAGES_PER_SESSION: int = 20
@@ -82,6 +87,9 @@ LAYER_RATE_LIMIT: str = "rate_limit"
 LAYER_PREFILTER: str = "prefilter"
 LAYER_LOOP_LIMIT: str = "loop_limit"
 LAYER_CLASSIFIER: str = "classifier"
+LAYER_OUTPUT_SCAN: str = "output_scan"
+# Not a blocked attempt: an outside service (xAI or OpenWeather) failed.
+LAYER_ERROR: str = "error"
 
 # --- Fixed refusals (written in code, so refusing costs nothing) ---------------
 
@@ -125,6 +133,36 @@ KEY_LIKE_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"xai-[A-Za-z0-9_-]{16,}", re.IGNORECASE),
     re.compile(r"[0-9a-f]{32,}", re.IGNORECASE),
 )
+
+# How much of an error's detail is logged, in characters (after cleaning).
+ERROR_DETAIL_LENGTH: int = 200
+
+# Request details that never belong in the log, even with the keys redacted:
+# whole URLs, query strings and auth headers. Each is replaced by the label
+# shown. They are removed from error details and stack traces (see
+# ``clean_error_text``); user snippets keep the user's own words.
+_STOP = r"[^\s\"'<>]"  # any character up to a space, quote or angle bracket
+REQUEST_DETAIL_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
+    # "https://api.openweathermap.org/data/2.5/weather?lat=...&appid=..."
+    (re.compile(rf"[a-z][a-z0-9+.-]*://{_STOP}+", re.IGNORECASE), "[URL]"),
+    # "?lat=48.85&appid=..." without the address in front of it
+    (re.compile(rf"\?{_STOP}*={_STOP}*"), "[QUERY]"),
+    # "Authorization: Bearer ...", "x-api-key: ...", "Bearer ..."
+    (
+        re.compile(
+            r"\b(?:proxy-)?authorization\s*[:=]\s*(?:bearer\s+|basic\s+)?[^\s,;]+"
+            r"|\b(?:x-)?api-key\s*[:=]\s*[^\s,;]+"
+            r"|\bbearer\s+[^\s,;]+",
+            re.IGNORECASE,
+        ),
+        "[HEADER]",
+    ),
+)
+
+# Every line of a log event after its first is indented by this, so text
+# inside an event (a stack trace, an odd exception message) can never look
+# like a new event.
+CONTINUATION_INDENT: str = "    "
 
 # The session-state entry that holds the rate-limit counters. It is separate
 # from the chat history, and only ``RateLimiter`` changes it.
@@ -455,6 +493,101 @@ def check_scope(
     return block
 
 
+# --- The output scan ----------------------------------------------------------
+
+# A unique marker hidden in the assistant's system prompt. It means nothing and
+# is used only to detect leaks: if it ever appears in a reply, the system
+# prompt has leaked, and the reply is blocked. It is deliberately not shaped
+# like a key, so it is never confused with one.
+CANARY: str = "WXBOT-CANARY-7Q4M-K9TZ-2R6P"
+
+# Markdown code fences: three or more backticks or tildes. The assistant never
+# writes code, so a fence means something went wrong.
+CODE_FENCE_PATTERN: re.Pattern[str] = re.compile(r"```|~~~")
+
+
+def _leak_reason(reply: str) -> str | None:
+    """The first reason ``reply`` must not be shown, or None if it is clean.
+
+    The reply is normalized first (see ``normalize_for_matching``), so a
+    change of letter case, look-alike letters or zero-width characters can't
+    hide a key or the canary.
+    """
+    text = normalize_for_matching(reply)
+    if any(normalize_for_matching(secret) in text for secret in secret_values()):
+        return "secret_value"
+    if any(pattern.search(text) for pattern in KEY_LIKE_PATTERNS):
+        return "key_like"
+    if normalize_for_matching(CANARY) in text:
+        return "canary"
+    if CODE_FENCE_PATTERN.search(text):
+        return "code_fence"
+    return None
+
+
+def scan_output(reply: str, user_text: str) -> Block | None:
+    """Check a finished reply before it is shown. None means it is safe.
+
+    It is blocked if it contains, checked in this order: a loaded key value
+    (``secret_value``), a key-like string (``key_like``), the system prompt's
+    ``CANARY`` (``canary``) or a code fence (``code_fence``). A blocked reply
+    is replaced by the standard ``BLOCKED_REQUEST_MESSAGE``, which doesn't say
+    what was found, and one line is written to the security log. Like every
+    other layer, the log line quotes ``user_text`` (the user's question), not
+    the reply.
+    """
+    reason = _leak_reason(reply)
+    if reason is None:
+        return None
+    block = Block(LAYER_OUTPUT_SCAN, reason, BLOCKED_REQUEST_MESSAGE)
+    log_block(block.layer, block.reason, user_text)
+    return block
+
+
+# --- Safe errors ----------------------------------------------------------------
+
+# What the user sees when a Grok (xAI) call fails. Fixed text written in code:
+# never the exception's own message, which can carry URLs, keys or internals.
+UNAVAILABLE_MESSAGE: str = (
+    "Sorry, the weather assistant is unavailable right now. Please try again shortly."
+)
+XAI_TIMEOUT_MESSAGE: str = (
+    "Sorry, the weather assistant took too long to answer. Please try again "
+    "in a moment."
+)
+XAI_BUSY_MESSAGE: str = (
+    "Sorry, the weather assistant is busy right now. Please wait a minute and "
+    "try again."
+)
+XAI_KEY_MESSAGE: str = (
+    "Sorry, the weather assistant couldn't sign in to xAI. If you run this "
+    "app, check that `XAI_API_KEY` in `.env` is correct."
+)
+
+
+def friendly_error(exc: BaseException) -> str:
+    """The fixed message to show the user when a Grok call fails.
+
+    ``ChatXAI`` raises the ``openai`` client's exceptions. The choice depends
+    only on the exception's type, never on its text, so the same failure
+    always gets the same message and nothing from the exception reaches the
+    user:
+
+    - a timeout: ``XAI_TIMEOUT_MESSAGE``
+    - HTTP 429 (too many requests): ``XAI_BUSY_MESSAGE``
+    - HTTP 401 or 403 (the key was refused): ``XAI_KEY_MESSAGE``
+    - anything else: ``UNAVAILABLE_MESSAGE``
+    """
+    # Checked first: an xAI timeout is also a kind of connection error.
+    if isinstance(exc, openai.APITimeoutError | TimeoutError):
+        return XAI_TIMEOUT_MESSAGE
+    if isinstance(exc, openai.RateLimitError):
+        return XAI_BUSY_MESSAGE
+    if isinstance(exc, openai.AuthenticationError | openai.PermissionDeniedError):
+        return XAI_KEY_MESSAGE
+    return UNAVAILABLE_MESSAGE
+
+
 # --- Logging ------------------------------------------------------------------
 
 
@@ -464,7 +597,8 @@ def redact(text: str) -> str:
     First the app's loaded key values, matched in any letter case and longest
     first (so one key inside another can't leave a piece behind), then any
     key-like string (see ``KEY_LIKE_PATTERNS``). A key is removed even when it
-    sits inside a longer string. Phase 7 uses this for exception details too.
+    sits inside a longer string. Everything written to the security log passes
+    through this (see ``RedactingFormatter``).
     """
     for secret in sorted(secret_values(), key=len, reverse=True):
         text = re.sub(re.escape(secret), REDACTED, text, flags=re.IGNORECASE)
@@ -482,6 +616,68 @@ def make_snippet(text: str) -> str:
     escapes, so user text can't start a fake log line.
     """
     return json.dumps(redact(text)[:SNIPPET_LENGTH])
+
+
+def clean_error_text(text: str) -> str:
+    """Make error text safe to log: secrets redacted, request details removed.
+
+    Keys are redacted first (see ``redact``), then every URL, query string and
+    auth header becomes ``[URL]``, ``[QUERY]`` or ``[HEADER]`` (see
+    ``REQUEST_DETAIL_PATTERNS``).
+    """
+    text = redact(text)
+    for pattern, label in REQUEST_DETAIL_PATTERNS:
+        text = pattern.sub(label, text)
+    return text
+
+
+def describe_error(exc: BaseException) -> str:
+    """A short, safe description of a failure for the log.
+
+    Known xAI errors are described by their status alone ("xAI HTTP 401",
+    "xAI timeout"), because xAI's own error text can echo part of the key.
+    Anything else is described by its message, cleaned with
+    ``clean_error_text`` and cut to ``ERROR_DETAIL_LENGTH`` characters. The
+    weather module's ``WeatherServiceError`` messages ("OpenWeather HTTP
+    401") are already safe and pass through unchanged.
+    """
+    if isinstance(exc, openai.APIStatusError):
+        return f"xAI HTTP {exc.status_code}"
+    if isinstance(exc, openai.APITimeoutError):
+        return "xAI timeout"
+    if isinstance(exc, openai.APIConnectionError):
+        return "xAI connection failed"
+    return clean_error_text(str(exc))[:ERROR_DETAIL_LENGTH]
+
+
+def stack_trace(exc: BaseException) -> str:
+    """Where ``exc`` was raised: file, line, function and source code only.
+
+    No exception message and no chained exception ("The above exception was
+    the direct cause…") is included, because those can carry request URLs
+    and keys. The result is still cleaned with ``clean_error_text``.
+    """
+    frames = traceback.extract_tb(exc.__traceback__)
+    return clean_error_text("".join(traceback.format_list(frames))).rstrip("\n")
+
+
+class RedactingFormatter(logging.Formatter):
+    """The security log's formatter, and its last safety net.
+
+    Everything it writes is redacted (see ``redact``), whatever the caller
+    passed in. Any exception text a caller attaches also loses its request
+    details. Every line of an event after the first is indented by
+    ``CONTINUATION_INDENT``, so nothing inside an event can pose as a new one.
+    """
+
+    def formatException(self, ei) -> str:  # noqa: N802 - logging's own name
+        """Format attached exception text with request details removed."""
+        return clean_error_text(super().formatException(ei))
+
+    def format(self, record: logging.LogRecord) -> str:
+        """Format one event: redacted, with its later lines indented."""
+        first, *rest = redact(super().format(record)).splitlines() or [""]
+        return "\n".join([first, *(CONTINUATION_INDENT + line for line in rest)])
 
 
 _logger_lock = threading.Lock()
@@ -505,7 +701,7 @@ def security_logger() -> logging.Logger:
                 handler.close()
             Path(path).parent.mkdir(parents=True, exist_ok=True)
             handler = logging.FileHandler(path, encoding="utf-8")
-            handler.setFormatter(logging.Formatter("%(asctime)s | %(message)s"))
+            handler.setFormatter(RedactingFormatter("%(asctime)s | %(message)s"))
             logger.addHandler(handler)
             logger.setLevel(logging.INFO)
             logger.propagate = False
@@ -521,4 +717,25 @@ def log_block(layer: str, reason: str, text: str) -> None:
     """
     security_logger().warning(
         "layer=%s | reason=%s | snippet=%s", layer, reason, make_snippet(text)
+    )
+
+
+def log_error(source: str, exc: BaseException) -> None:
+    """Write a failure to the security log, with every secret removed.
+
+    ``source`` names the service that failed (``"xai"`` or
+    ``"openweather"``). The event's first line gives the error type and a
+    safe ``describe_error`` detail, for example ``2026-11-07 10:15:02,481 |
+    layer=error | source=xai | error=AuthenticationError | detail="xAI HTTP
+    401"``. The indented ``stack_trace`` follows. The user never sees any of
+    this; they get a fixed, friendly message instead.
+    """
+    detail = json.dumps(describe_error(exc))
+    security_logger().warning(
+        "layer=%s | source=%s | error=%s | detail=%s\n%s",
+        LAYER_ERROR,
+        source,
+        type(exc).__name__,
+        detail,
+        stack_trace(exc),
     )

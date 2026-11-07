@@ -283,6 +283,141 @@ def test_fetch_json_failures_carry_no_url_or_key(
     assert caught.value.__suppress_context__
 
 
+# --- Friendly OpenWeather errors (Phase 7) ------------------------------------
+
+# Shaped like a real OpenWeather key: 32 hex characters.
+LOADED_OW_KEY = "fedcba9876543210fedcba9876543210"
+
+
+@pytest.mark.parametrize(
+    ("failure", "problem"),
+    [
+        pytest.param(FakeResponse(401), "key_rejected", id="http-401"),
+        pytest.param(FakeResponse(403), "key_rejected", id="http-403"),
+        pytest.param(FakeResponse(429), "rate_limited", id="http-429"),
+        pytest.param(FakeResponse(500), "unavailable", id="http-500"),
+        pytest.param(requests.Timeout("timed out"), "timeout", id="timeout"),
+        pytest.param(
+            requests.ConnectTimeout("connect timed out"),
+            "timeout",
+            id="connect-timeout",
+        ),
+        pytest.param(requests.ConnectionError("no route"), "unavailable", id="offline"),
+    ],
+)
+def test_fetch_json_says_what_kind_of_failure_it_was(monkeypatch, failure, problem):
+    def fake_get(url, params, timeout):
+        if isinstance(failure, Exception):
+            raise failure
+        return failure
+
+    monkeypatch.setattr(requests, "get", fake_get)
+
+    with pytest.raises(WeatherServiceError) as caught:
+        fetch_json("https://x/", {})
+
+    assert caught.value.problem == problem
+
+
+def test_an_unknown_problem_counts_as_unavailable():
+    assert WeatherServiceError("OpenWeather HTTP 418", "teapot").problem == (
+        "unavailable"
+    )
+
+
+class LeakyErrorResponse(FakeResponse):
+    """A failed response whose error quotes the full URL, as real requests does."""
+
+    def __init__(self, status: int, full_url: str) -> None:
+        super().__init__(status)
+        self.full_url = full_url
+
+    def raise_for_status(self) -> None:
+        raise requests.HTTPError(
+            f"{self.status_code} Client Error: for url: {self.full_url}",
+            response=self,
+        )
+
+
+def fail_like_requests(status: int | None):
+    """A fake ``requests.get`` that fails the way the real one does.
+
+    Real ``requests`` errors quote the full URL, query string and key.
+    ``status`` None means a timeout instead of an HTTP error.
+    """
+
+    def fake_get(url, params, timeout):
+        query = "&".join(f"{name}={value}" for name, value in params.items())
+        full_url = f"{url}?{query}"
+        if status is None:
+            raise requests.Timeout(f"Read timed out. (read timeout=10) url: {full_url}")
+        return LeakyErrorResponse(status, full_url)
+
+    return fake_get
+
+
+@pytest.mark.parametrize(
+    ("status", "expected_message", "logged_detail"),
+    [
+        pytest.param(
+            401,
+            weather.SERVICE_KEY_REJECTED_MESSAGE,
+            "OpenWeather HTTP 401",
+            id="key-rejected",
+        ),
+        pytest.param(
+            429, weather.SERVICE_BUSY_MESSAGE, "OpenWeather HTTP 429", id="rate-limited"
+        ),
+        pytest.param(
+            503,
+            weather.SERVICE_UNAVAILABLE_MESSAGE,
+            "OpenWeather HTTP 503",
+            id="unavailable",
+        ),
+        pytest.param(
+            None, weather.SERVICE_TIMEOUT_MESSAGE, "OpenWeather Timeout", id="timeout"
+        ),
+    ],
+)
+def test_an_openweather_failure_is_friendly_and_logged_without_url_or_key(
+    monkeypatch, security_log, status, expected_message, logged_detail
+):
+    monkeypatch.setenv("OPENWEATHER_API_KEY", LOADED_OW_KEY)
+    monkeypatch.setattr(requests, "get", fail_like_requests(status))
+
+    result = lookup_current_weather("Paris")
+
+    # The model gets a friendly message to pass on, with no internals.
+    assert result == {
+        "kind": "error",
+        "error": "service_unavailable",
+        "message": expected_message,
+    }
+    # The details go to the security log: one event, type plus safe message.
+    log = security_log.read_text(encoding="utf-8")
+    events = [line for line in log.splitlines() if not line.startswith(" ")]
+    assert len(events) == 1
+    assert "| layer=error | source=openweather_current |" in events[0]
+    assert f'detail="{logged_detail}"' in events[0]
+    # No raw request URL, query string, header or key, anywhere.
+    # (The stack trace shows source code such as `"appid": openweather_key()`,
+    # never a value, so it is the query-string form "appid=" that must not
+    # appear.)
+    for leak in (LOADED_OW_KEY, "://", "appid=", "lat=", "Client Error"):
+        assert leak not in log
+        assert leak not in str(result)
+
+
+def test_an_unexpected_response_shape_is_logged_and_friendly(monkeypatch, security_log):
+    monkeypatch.setattr(weather, "fetch_json", lambda url, params: [{"name": "Paris"}])
+
+    result = lookup_current_weather("Paris")  # geocoding lacks "lat"
+
+    assert result["message"] == weather.SERVICE_UNAVAILABLE_MESSAGE
+    log = security_log.read_text(encoding="utf-8")
+    assert "| layer=error | source=openweather_current | error=KeyError |" in log
+
+
 # --- Condition text from OpenWeather ------------------------------------------
 
 

@@ -12,8 +12,12 @@ runs before any Grok call: 20 messages per session, a 3-second cooldown, a
 300-character cap and attack-phrase matching, with each block written as one
 redacted line to `logs/security.log`. Then a temperature-0 grok-4.7
 classifier must return a clear YES (it fails closed) before the agent runs
-with a hardened system prompt. The output scan and safe error handling are
-still planned. The plan's ticked criteria show what is done.
+with a hardened system prompt that carries a leak-detecting canary. Every reply
+is scanned for keys, key-like strings, the canary and code fences before it is
+shown. Every xAI and OpenWeather failure gives the user a fixed, friendly
+message, and its redacted details (no URLs, headers or exception text in the
+stack trace) go only to the security log. Phase 8 (README, manual checks,
+submission) is still planned. The plan's ticked criteria show what is done.
 
 The developer is a beginner, so code should favor clarity.
 

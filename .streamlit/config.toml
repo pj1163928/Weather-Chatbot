@@ -1,0 +1,10 @@
+# Streamlit settings for the weather chatbot. No secrets go here: keys live
+# only in .env.
+
+[client]
+# If the app ever hits an unexpected error, show the browser only a generic
+# message. The exception type, its message and the stack trace go to the
+# terminal instead, so nobody using the page learns about the app's internals.
+# Expected failures (xAI or OpenWeather down, timeouts, refused keys) never get
+# this far: the app catches them and shows a friendly message of its own.
+showErrorDetails = "none"

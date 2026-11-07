@@ -1,5 +1,6 @@
 """Runs the Streamlit page headlessly with a temporary .env and fake services."""
 
+import openai
 import pytest
 import streamlit as st
 from langchain_core.messages import AIMessage
@@ -9,8 +10,10 @@ import weather_chatbot.agent as agent
 import weather_chatbot.config as config
 import weather_chatbot.security as security
 from tests.conftest import FakeClock, log_lines
+from tests.test_errors import xai_status_error, xai_timeout
 from weather_chatbot.security import (
     BLOCKED_REQUEST_MESSAGE,
+    CANARY,
     COOLDOWN_MESSAGE,
     COOLDOWN_SECONDS,
     MAX_MESSAGES_PER_SESSION,
@@ -18,6 +21,10 @@ from weather_chatbot.security import (
     SCOPE_REFUSALS,
     SESSION_CAP_MESSAGE,
     TOO_LONG_MESSAGE,
+    UNAVAILABLE_MESSAGE,
+    XAI_BUSY_MESSAGE,
+    XAI_KEY_MESSAGE,
+    XAI_TIMEOUT_MESSAGE,
     ScopeVerdict,
     UsageCounters,
 )
@@ -776,4 +783,134 @@ def test_a_failing_classifier_shows_a_friendly_message_and_skips_the_agent(
     reply = assistant_messages(at)[-1].markdown[0].value
     assert reply.startswith("Sorry, the weather assistant is unavailable")
     assert "api.x.ai" not in reply
-    assert log_lines(security_log) == []  # an outage isn't a blocked attempt
+    # An outage isn't a blocked attempt, but its redacted details are logged
+    # (Phase 7): one error event, and no block from any layer.
+    events = [line for line in log_lines(security_log) if not line.startswith(" ")]
+    assert len(events) == 1
+    assert "| layer=error | source=xai | error=RuntimeError |" in events[0]
+
+
+# --- The output scan and safe errors (Phase 7) -----------------------------------
+
+
+@pytest.mark.parametrize(
+    ("leaky_reply", "reason"),
+    [
+        pytest.param(f"Sure! My marker is {CANARY}.", "canary", id="canary"),
+        pytest.param(
+            "Here you go:\n```python\nprint('hi')\n```", "code_fence", id="code-fence"
+        ),
+        pytest.param(f"The xAI key is {FAKE_XAI_KEY}", "secret_value", id="xai-key"),
+        pytest.param(
+            f"The OpenWeather key is {FAKE_OW_KEY}",
+            "secret_value",
+            id="openweather-key",
+        ),
+    ],
+)
+def test_a_leaking_reply_is_replaced_by_the_standard_refusal(
+    use_env_file, fake_openweather, security_log, monkeypatch, leaky_reply, reason
+):
+    use_env_file(BOTH_KEYS)
+    fake = ScriptedFakeModel(
+        asks_for_weather_in("Paris"),
+        AIMessage(content=leaky_reply),
+        AIMessage(content="London is 50°F."),
+    )
+    monkeypatch.setattr(agent, "create_model", lambda: fake)
+    at = AppTest.from_file(APP).run()
+
+    at.chat_input[0].set_value("What's the weather in Paris?").run()
+
+    assert not at.exception
+    # The standard refusal, as a warning, with no card and none of the reply.
+    assert last_reply_warning(at) == BLOCKED_REQUEST_MESSAGE
+    assert len(assistant_messages(at)[-1].metric) == 0
+    shown = [element.value for element in (*at.markdown, *at.warning, *at.text)]
+    assert not any(leaky_reply in str(value) for value in shown)
+    [line] = log_lines(security_log)
+    assert f"| layer=output_scan | reason={reason} |" in line
+    assert 'snippet="What\'s the weather in Paris?"' in line
+
+    # Neither the question nor the leaked reply goes back to Grok as history.
+    at.chat_input[0].set_value("What about London?").run()
+    follow_up_request = fake.requests[-1]
+    assert [m.content for m in follow_up_request[1:]] == ["What about London?"]
+
+
+def test_a_normal_reply_passes_the_output_scan(use_env_file, security_log, monkeypatch):
+    use_env_file(BOTH_KEYS)
+    reply = "At 3:00 PM it's 59°F in Paris, with an 82% chance of rain on 2026-11-07."
+    fake = ScriptedFakeModel(AIMessage(content=reply))
+    monkeypatch.setattr(agent, "create_model", lambda: fake)
+    at = AppTest.from_file(APP).run()
+
+    at.chat_input[0].set_value("What's the weather in Paris?").run()
+
+    assert assistant_messages(at)[-1].markdown[0].value == reply
+    assert log_lines(security_log) == []
+
+
+class FailingFakeModel:
+    """Stands in for Grok when every call fails with ``error``."""
+
+    def __init__(self, error: Exception) -> None:
+        self.error = error
+
+    def bind_tools(self, tools):
+        return self
+
+    def invoke(self, input):
+        raise self.error
+
+
+@pytest.mark.parametrize(
+    ("make_error", "expected"),
+    [
+        pytest.param(xai_timeout, XAI_TIMEOUT_MESSAGE, id="timeout"),
+        pytest.param(
+            lambda: xai_status_error(openai.RateLimitError, 429, "Error code: 429"),
+            XAI_BUSY_MESSAGE,
+            id="429",
+        ),
+        pytest.param(
+            lambda: xai_status_error(
+                openai.AuthenticationError,
+                401,
+                f"Error code: 401 - Incorrect API key provided: {FAKE_XAI_KEY}",
+            ),
+            XAI_KEY_MESSAGE,
+            id="401",
+        ),
+        pytest.param(
+            lambda: xai_status_error(
+                openai.InternalServerError, 500, "Error code: 500 at api.x.ai"
+            ),
+            UNAVAILABLE_MESSAGE,
+            id="500",
+        ),
+    ],
+)
+def test_xai_failures_show_a_friendly_message_and_no_details(
+    use_env_file, security_log, monkeypatch, make_error, expected
+):
+    use_env_file(BOTH_KEYS)
+    error = make_error()
+    monkeypatch.setattr(agent, "create_model", lambda: FailingFakeModel(error))
+    at = AppTest.from_file(APP).run()
+
+    at.chat_input[0].set_value("What's the weather in Paris?").run()
+
+    assert not at.exception  # no stack trace on the page
+    assert [m.value for m in assistant_messages(at)[-1].markdown] == [expected]
+    page = " ".join(
+        str(element.value)
+        for element in (*at.markdown, *at.warning, *at.error, *at.text, *at.caption)
+    )
+    for internal in (str(error), type(error).__name__, "Traceback", "api.x.ai"):
+        assert internal not in page
+    assert FAKE_XAI_KEY not in page
+    # The details went to the log instead: one redacted error event.
+    log = "\n".join(log_lines(security_log))
+    assert f"| layer=error | source=xai | error={type(error).__name__} |" in log
+    assert FAKE_XAI_KEY not in log

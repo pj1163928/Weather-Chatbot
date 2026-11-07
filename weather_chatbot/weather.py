@@ -11,7 +11,6 @@ Every tool returns a plain dict. A successful lookup has ``"kind":
 contain the API key.
 """
 
-import logging
 import re
 import threading
 import time
@@ -27,7 +26,10 @@ from pydantic import BaseModel, Field
 
 from weather_chatbot.config import openweather_key
 
-logger = logging.getLogger(__name__)
+# Every OpenWeather request gives up after REQUEST_TIMEOUT_SECONDS, which lives
+# in the security module with the other limits. Failures are written to the
+# security log with log_error, redacted.
+from weather_chatbot.security import REQUEST_TIMEOUT_SECONDS, log_error
 
 # --- Security limits and settings -------------------------------------------
 
@@ -36,9 +38,6 @@ MAX_CITY_LENGTH: int = 60
 
 # The only non-letter characters a city argument may contain.
 ALLOWED_CITY_PUNCTUATION: frozenset[str] = frozenset(" ,-.")
-
-# Every OpenWeather request gives up after this many seconds.
-REQUEST_TIMEOUT_SECONDS: int = 10
 
 # Units OpenWeather understands. The app picks one; the model never does.
 SUPPORTED_UNITS: tuple[str, ...] = ("imperial", "metric")
@@ -100,18 +99,60 @@ CITY_NOT_FOUND_MESSAGE: str = (
 SERVICE_UNAVAILABLE_MESSAGE: str = (
     "The weather service is unavailable right now. Tell the user to try again shortly."
 )
+SERVICE_TIMEOUT_MESSAGE: str = (
+    "The weather service took too long to answer. Tell the user to try again "
+    "in a moment."
+)
+SERVICE_BUSY_MESSAGE: str = (
+    "The weather service is busy (too many requests). Tell the user to wait a "
+    "minute and try again."
+)
+SERVICE_KEY_REJECTED_MESSAGE: str = (
+    "The weather service didn't accept this app's OpenWeather key, so weather "
+    "lookups aren't working. Tell the user that whoever runs the app should "
+    "check OPENWEATHER_API_KEY in the .env file, and that a new key can take "
+    "up to 2 hours to start working."
+)
 FORECAST_INCOMPLETE_MESSAGE: str = (
     "The forecast service didn't return a full five days right now. Tell the "
     "user the forecast is unavailable and to try again shortly."
 )
+
+# What went wrong with an OpenWeather request (``WeatherServiceError.problem``)
+# -> the message the model gets in the "service_unavailable" error result.
+SERVICE_ERROR_MESSAGES: dict[str, str] = {
+    "timeout": SERVICE_TIMEOUT_MESSAGE,
+    "rate_limited": SERVICE_BUSY_MESSAGE,
+    "key_rejected": SERVICE_KEY_REJECTED_MESSAGE,
+    "unavailable": SERVICE_UNAVAILABLE_MESSAGE,
+}
 
 
 class WeatherServiceError(Exception):
     """OpenWeather couldn't be reached or refused a request.
 
     The message is always safe to log: a status code or an error type, never
-    a URL (OpenWeather URLs carry the API key).
+    a URL (OpenWeather URLs carry the API key). ``problem`` is one of the
+    ``SERVICE_ERROR_MESSAGES`` keys and picks what the user is told.
     """
+
+    def __init__(self, message: str, problem: str = "unavailable") -> None:
+        super().__init__(message)
+        self.problem = problem if problem in SERVICE_ERROR_MESSAGES else "unavailable"
+
+
+def service_problem(status: int | None) -> str:
+    """Name what an OpenWeather HTTP error status means for the user.
+
+    401 (and 403) mean the key was refused, which also happens while a new key
+    is still activating. 429 means too many requests. Anything else is
+    "unavailable".
+    """
+    if status in (401, 403):
+        return "key_rejected"
+    if status == 429:
+        return "rate_limited"
+    return "unavailable"
 
 
 def is_valid_city(city: str) -> bool:
@@ -150,16 +191,24 @@ def fetch_json(url: str, params: dict[str, Any]) -> Any:
     """GET ``url`` with ``params`` and return the decoded JSON.
 
     Times out after ``REQUEST_TIMEOUT_SECONDS``. Any failure becomes a
-    ``WeatherServiceError`` with a safe message. ``from None`` drops the
-    original exception, because its text includes the full URL and key.
+    ``WeatherServiceError`` with a safe message (for example "OpenWeather
+    HTTP 401") and a ``problem`` (timeout, rate_limited, key_rejected or
+    unavailable). ``from None`` drops the original exception, because its
+    text includes the full URL and key.
     """
     try:
         response = requests.get(url, params=params, timeout=REQUEST_TIMEOUT_SECONDS)
         response.raise_for_status()
         return response.json()
     except requests.HTTPError as exc:
-        status = exc.response.status_code if exc.response is not None else "?"
-        raise WeatherServiceError(f"OpenWeather HTTP {status}") from None
+        status = exc.response.status_code if exc.response is not None else None
+        raise WeatherServiceError(
+            f"OpenWeather HTTP {status or '?'}", service_problem(status)
+        ) from None
+    except requests.Timeout as exc:
+        raise WeatherServiceError(
+            f"OpenWeather {type(exc).__name__}", "timeout"
+        ) from None
     except requests.RequestException as exc:
         raise WeatherServiceError(f"OpenWeather {type(exc).__name__}") from None
 
@@ -419,14 +468,17 @@ def look_up_weather(
     units: str,
     url: str,
     parse: Callable[[Any, str], dict[str, Any]],
-    lookup_name: str,
+    log_source: str,
 ) -> dict[str, Any]:
     """The path both tools share: validate, check the cache, geocode, fetch, parse.
 
     ``parse(data, location)`` turns OpenWeather's JSON into the tool's result.
-    ``lookup_name`` names the lookup in log lines (never the URL, which would
-    carry the key). Problems come back as error results, never as exceptions,
-    so the model can explain them politely.
+    ``log_source`` names the lookup in the security log (never the URL, which
+    would carry the key). Problems come back as error results, never as
+    exceptions, so the model can explain them politely: an OpenWeather failure
+    gives a "service_unavailable" result whose message depends on what went
+    wrong (see ``SERVICE_ERROR_MESSAGES``), and its redacted details go to the
+    security log with ``log_error``.
 
     The cache holds the resolved location and OpenWeather's raw JSON, not the
     parsed result, so a cached forecast still works out "Today" from the
@@ -462,11 +514,12 @@ def look_up_weather(
             WEATHER_CACHE.put(key, (location, data))
         return result
     except WeatherServiceError as exc:
-        # Phase 7 replaces this with full error mapping and redacted logging.
-        logger.warning("%s lookup failed: %s", lookup_name, exc)
-        return error_result("service_unavailable", SERVICE_UNAVAILABLE_MESSAGE)
-    except (KeyError, IndexError, TypeError):
-        logger.warning("%s lookup failed: unexpected response shape", lookup_name)
+        log_error(log_source, exc)
+        message = SERVICE_ERROR_MESSAGES[exc.problem]
+        return error_result("service_unavailable", message)
+    except (KeyError, IndexError, TypeError) as exc:
+        # OpenWeather answered, but not in the shape expected.
+        log_error(log_source, exc)
         return error_result("service_unavailable", SERVICE_UNAVAILABLE_MESSAGE)
 
 
@@ -477,7 +530,7 @@ def lookup_current_weather(city: str, units: str = DEFAULT_UNITS) -> dict[str, A
         units,
         CURRENT_WEATHER_URL,
         lambda data, location: parse_current_weather(data, location, units),
-        "Current-weather",
+        "openweather_current",
     )
 
 
@@ -497,10 +550,10 @@ def lookup_weather_forecast(
             units,
             FORECAST_URL,
             lambda data, location: parse_forecast(data, location, units, current_time),
-            "Forecast",
+            "openweather_forecast",
         )
     except IncompleteForecastError as exc:
-        logger.warning("Forecast lookup failed: %s", exc)
+        log_error("openweather_forecast", exc)
         return error_result("forecast_incomplete", FORECAST_INCOMPLETE_MESSAGE)
 
 
