@@ -1,0 +1,30 @@
+[project]
+name = "weather-chatbot"
+version = "0.1.0"
+description = "A secure, locally run AI weather chatbot (LangChain + Grok + OpenWeather + Streamlit)."
+requires-python = ">=3.13"
+# Exact pins so a fresh install matches the tested setup. uv.lock pins the
+# rest of the dependency tree.
+dependencies = [
+    "langchain-core==1.7.6",
+    "langchain-xai==1.3.0",
+    "python-dotenv==1.2.4",
+    "streamlit==1.67.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==9.2.0",
+    "ruff==0.17.4",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 88
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]

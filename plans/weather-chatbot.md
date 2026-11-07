@@ -63,15 +63,15 @@ Build a bare Streamlit chat page that sends the user's message to the model, ini
 
 ### Acceptance criteria
 
-- [ ] `.gitignore` is created before `git init`, and `git check-ignore -v .env` confirms `.env` is ignored.
-- [ ] `.env.example` exists with placeholder values and contains no real keys.
-- [ ] Starting the app with a missing or placeholder `XAI_API_KEY` shows a clear setup message instead of crashing or calling the API.
-- [ ] The app starts and chats normally while `OPENWEATHER_API_KEY` is still missing or a placeholder.
-- [ ] The model is initialized with `ChatXAI(model="grok-4.7")`.
+- [x] `.gitignore` is created before `git init`, and `git check-ignore -v .env` confirms `.env` is ignored.
+- [x] `.env.example` exists with placeholder values and contains no real keys.
+- [x] Starting the app with a missing or placeholder `XAI_API_KEY` shows a clear setup message instead of crashing or calling the API.
+- [x] The app starts and chats normally while `OPENWEATHER_API_KEY` is still missing or a placeholder.
+- [x] The model is initialized with `ChatXAI(model="grok-4.7")`.
 - [ ] With a working xAI key, a message typed in the chat returns a complete grok-4.7 reply after a spinner.
-- [ ] A minimal weather-assistant system prompt is sent with every request, and the chatbot never runs without behavioral instructions.
-- [ ] No key appears anywhere in source code.
-- [ ] pytest unit tests cover the config check (missing key, placeholder key, configured key). These tests prove only that a key is *configured and not a placeholder*. They don't, and can't, prove the provider accepts it; that's confirmed by the live chat above.
+- [x] A minimal weather-assistant system prompt is sent with every request, and the chatbot never runs without behavioral instructions.
+- [x] No key appears anywhere in source code.
+- [x] pytest unit tests cover the config check (missing key, placeholder key, configured key). These tests prove only that a key is *configured and not a placeholder*. They don't, and can't, prove the provider accepts it; that's confirmed by the live chat above.
 
 ### TDD recommendation
 

@@ -10,3 +10,17 @@ See [prd/weather-chatbot.md](prd/weather-chatbot.md) for requirements and [plans
 2. Replace the placeholders in `.env` with your real `XAI_API_KEY` and `OPENWEATHER_API_KEY`.
 
 `.env` is gitignored and must never be committed.
+
+Only `XAI_API_KEY` is required for now. `OPENWEATHER_API_KEY` becomes required
+once the weather tools are added. Sign up for OpenWeather early: new keys can take
+up to 2 hours to activate.
+
+## Run
+
+This project uses [uv](https://docs.astral.sh/uv/) and Python 3.13.
+
+```
+uv sync                          # install the pinned dependencies
+uv run streamlit run app.py      # start the chat at http://localhost:8501
+uv run pytest                    # run the tests (no API keys needed)
+```
